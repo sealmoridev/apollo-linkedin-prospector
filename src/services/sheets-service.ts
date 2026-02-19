@@ -12,9 +12,13 @@ export class SheetsService {
         this.clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
         // Por defecto asume localhost:3000 si no estamos en producción
-        let baseUrl = process.env.PUBLIC_WEBHOOK_URL
-            ? process.env.PUBLIC_WEBHOOK_URL.replace('/webhook/apollo', '')
-            : 'http://localhost:3000';
+        let baseUrl = 'http://localhost:3000';
+
+        if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+            baseUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+        } else if (process.env.PUBLIC_WEBHOOK_URL) {
+            baseUrl = process.env.PUBLIC_WEBHOOK_URL.replace('/webhook/apollo', '');
+        }
 
         if (baseUrl.endsWith('/')) {
             baseUrl = baseUrl.slice(0, -1);
