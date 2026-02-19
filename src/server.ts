@@ -2,7 +2,10 @@ import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import { WebhookServer } from './services/webhook-server';
 import { EnrichmentService } from './services/enrichment-service';
+import { SheetsService } from './services/sheets-service';
+import { tokenStorage } from './services/token-storage';
 import { validateLinkedInUrl } from './utils/linkedin-validator';
+import cors from 'cors';
 
 dotenv.config();
 
@@ -21,6 +24,7 @@ if (!APOLLO_API_KEY) {
 
 // Crear app Express
 const app = express();
+app.use(cors()); // Importante para que la extensión de Chrome pueda llamar al API
 app.use(express.json());
 
 // Determinar URL pública del webhook
@@ -49,6 +53,21 @@ const webhookServer = new WebhookServer(PORT, webhookUrl);
 
 // Crear servicio de enriquecimiento
 const enrichmentService = new EnrichmentService(APOLLO_API_KEY, webhookServer);
+
+// Crear servicio de Google Sheets
+const sheetsService = new SheetsService();
+
+// Escuchar eventos del webhook para actualizar teléfonos en Sheets
+webhookServer.on('data', async (data) => {
+  // Nota: en un escenario real, Apollo no sabe el userId. Tendrías que mapear el requestId con el userId que lo inició.
+  // Para este prototipo, vamos a intentar ver si existe un 'userId' en la metadata, de lo contrario usaremos 'default'
+  const userId = data.rawData?.metadata?.userId || 'default';
+
+  if (data.phoneNumbers && data.phoneNumbers.length > 0 && data.linkedinUrl) {
+    console.log(`[Google Sheets] Intentando actualizar teléfono para URL: ${data.linkedinUrl} (user: ${userId})`);
+    await sheetsService.updatePhone(userId, data.linkedinUrl, data.phoneNumbers.map((p: any) => p.sanitized_number));
+  }
+});
 
 // ============================================================================
 // RUTAS DE LA API
@@ -82,7 +101,7 @@ app.get('/', (req: Request, res: Response) => {
 // Enriquecer un perfil individual
 app.post('/api/enrich', async (req: Request, res: Response) => {
   try {
-    const { linkedinUrl, includePhone = false } = req.body;
+    const { linkedinUrl, includePhone = false, saveToSheets = false, userId = 'default' } = req.body;
 
     if (!linkedinUrl) {
       return res.status(400).json({
@@ -112,9 +131,23 @@ app.post('/api/enrich', async (req: Request, res: Response) => {
       includePhone
     );
 
+    let sheetSaved = false;
+    let sheetError = null;
+
+    if (saveToSheets) {
+      try {
+        sheetSaved = await sheetsService.appendLead(userId, lead);
+      } catch (e: any) {
+        console.error('Error guardando en Sheets:', e);
+        sheetError = e.message || 'Error guardando en Sheets';
+      }
+    }
+
     res.json({
       success: true,
-      data: lead
+      data: lead,
+      sheetSaved: sheetSaved,
+      sheetError: sheetError
     });
 
   } catch (error) {
@@ -164,6 +197,82 @@ app.post('/api/enrich/batch', async (req: Request, res: Response) => {
       error: 'Failed to enrich profiles',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+});
+
+// ============================================================================
+// RUTAS DE GOOGLE OAUTH
+// ============================================================================
+
+// 1. Obtener URL de autenticación
+app.get('/api/auth/google', (req: Request, res: Response) => {
+  // Opcional: pasar el userId al State para saber a quién pertenece el token
+  const userId = (req.query.userId as string) || 'default';
+  const url = sheetsService.getAuthUrl() + `&state=${userId}`;
+
+  res.json({ url });
+});
+
+// 2. Callback de Google
+app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
+  const code = req.query.code as string;
+  const userId = (req.query.state as string) || 'default';
+
+  if (!code) {
+    return res.status(400).send('No code provided');
+  }
+
+  try {
+    const tokens = await sheetsService.getTokensFromCode(code);
+
+    // Guardar tokens en nuestro "almacenamiento"
+    tokenStorage.setToken(userId, {
+      accessToken: tokens.access_token || '',
+      refreshToken: tokens.refresh_token || '',
+      expiryDate: tokens.expiry_date || 0
+    });
+
+    console.log(`✅ [OAuth] Tokens guardados para el usuario: ${userId}`);
+
+    // Opcional: Crear el spreadsheet automáticamente en el momento del login
+    try {
+      await sheetsService.getOrCreateSpreadsheet(userId);
+    } catch (e) {
+      console.warn('No se pudo crear el spreadsheet durante el login inicial, se intentará luego.', e);
+    }
+
+    // Devolver un HTML que cierre la ventana emergente de Chrome
+    res.send(`
+      <html>
+        <head><title>Autenticación Exitosa</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+          <h2>¡Autenticación con Google exitosa!</h2>
+          <p>Ya puedes volver a la extensión y cerrar esta pestaña.</p>
+          <script>
+            setTimeout(() => { window.close() }, 3000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('Error in OAuth callback:', error);
+    res.status(500).send('Authentication failed');
+  }
+});
+
+// 3. Verificar estado (Para la extensión de Chrome)
+app.get('/api/auth/status', (req: Request, res: Response) => {
+  const userId = (req.query.userId as string) || 'default';
+  const tokens = tokenStorage.getToken(userId);
+
+  if (tokens) {
+    res.json({
+      authenticated: true,
+      spreadsheetId: tokens.spreadsheetId || null
+    });
+  } else {
+    res.json({ authenticated: false });
   }
 });
 

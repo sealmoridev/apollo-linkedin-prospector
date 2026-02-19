@@ -18,7 +18,7 @@ export class WebhookServer extends EventEmitter {
     super();
     this.port = port;
     this.app = express();
-    
+
     // Si no se proporciona URL pública, usar localhost (solo para desarrollo)
     this.webhookUrl = publicUrl || `http://localhost:${port}/webhook/apollo`;
 
@@ -29,7 +29,7 @@ export class WebhookServer extends EventEmitter {
   private setupMiddleware() {
     // Parse JSON bodies
     this.app.use(express.json());
-    
+
     // Log requests
     this.app.use((req, res, next) => {
       console.log(`[Webhook] ${req.method} ${req.path}`);
@@ -47,20 +47,20 @@ export class WebhookServer extends EventEmitter {
     this.app.post('/webhook/apollo', (req: Request, res: Response) => {
       try {
         const data = req.body;
-        
+
         console.log('[Webhook] Received data from Apollo:');
         console.log(JSON.stringify(data, null, 2));
 
         // Extraer información relevante
         const enrichmentData = this.parseWebhookData(data);
-        
+
         if (enrichmentData.requestId) {
           // Almacenar datos temporalmente
           this.pendingData.set(enrichmentData.requestId, enrichmentData);
-          
+
           // Emitir evento para que el cliente pueda recoger los datos
           this.emit('data', enrichmentData);
-          
+
           console.log(`[Webhook] Data stored for request: ${enrichmentData.requestId}`);
         }
 
@@ -76,7 +76,7 @@ export class WebhookServer extends EventEmitter {
     this.app.get('/webhook/pending/:requestId', (req: Request, res: Response) => {
       const requestId = req.params.requestId;
       const data = this.pendingData.get(requestId);
-      
+
       if (data) {
         res.json(data);
       } else {
@@ -91,6 +91,7 @@ export class WebhookServer extends EventEmitter {
     return {
       requestId: data.request_id || data.id,
       personId: data.person?.id,
+      linkedinUrl: data.person?.linkedin_url,
       phoneNumbers: data.person?.phone_numbers || [],
       personalEmails: data.person?.personal_emails || [],
       organizationId: data.organization?.id,
@@ -159,7 +160,7 @@ export class WebhookServer extends EventEmitter {
    */
   cleanupOldData() {
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    
+
     for (const [requestId, data] of this.pendingData.entries()) {
       if (data.timestamp.getTime() < oneHourAgo) {
         this.pendingData.delete(requestId);

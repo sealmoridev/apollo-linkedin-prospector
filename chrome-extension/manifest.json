@@ -1,0 +1,27 @@
+{
+    "manifest_version": 3,
+    "name": "Apollo LinkedIn Prospector",
+    "version": "1.0.0",
+    "description": "Extrae datos de perfiles de LinkedIn y los guarda en Google Sheets usando Apollo.",
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "assets/icon16.png",
+            "48": "assets/icon48.png",
+            "128": "assets/icon128.png"
+        }
+    },
+    "icons": {
+        "16": "assets/icon16.png",
+        "48": "assets/icon48.png",
+        "128": "assets/icon128.png"
+    },
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage"
+    ],
+    "host_permissions": [
+        "https://*.linkedin.com/in/*"
+    ]
+}
