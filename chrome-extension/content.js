@@ -197,6 +197,20 @@ const initializeWidgetLogic = async () => {
         trigger.classList.remove('hidden');
     });
 
+    // Escuchar mensajes desde el background script (ej. click en el icono de extensión)
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === "togglePanel") {
+            const isOpen = panel.classList.contains('open');
+            if (isOpen) {
+                panel.classList.remove('open');
+                trigger.classList.remove('hidden');
+            } else {
+                panel.classList.add('open');
+                trigger.classList.add('hidden');
+            }
+        }
+    });
+
     // --- DETECCIÓN DE URL SPAs ---
     const updateUrlDisplay = () => {
         currentLinkedinUrl = window.location.href;
