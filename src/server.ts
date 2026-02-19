@@ -98,10 +98,14 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
+// ============================================================================
+// RUTAS DE LA API - ENRIQUECIMIENTO (PASO 1)
+// ============================================================================
+
 // Enriquecer un perfil individual
 app.post('/api/enrich', async (req: Request, res: Response) => {
   try {
-    const { linkedinUrl, includePhone = false, saveToSheets = false, userId = 'default' } = req.body;
+    const { linkedinUrl, includePhone = false, userId = 'default' } = req.body;
 
     if (!linkedinUrl) {
       return res.status(400).json({
@@ -131,23 +135,10 @@ app.post('/api/enrich', async (req: Request, res: Response) => {
       includePhone
     );
 
-    let sheetSaved = false;
-    let sheetError = null;
-
-    if (saveToSheets) {
-      try {
-        sheetSaved = await sheetsService.appendLead(userId, lead);
-      } catch (e: any) {
-        console.error('Error guardando en Sheets:', e);
-        sheetError = e.message || 'Error guardando en Sheets';
-      }
-    }
-
+    // Ya no guardamos aquí. Solo devolvemos los datos para "Pre-visualización"
     res.json({
       success: true,
-      data: lead,
-      sheetSaved: sheetSaved,
-      sheetError: sheetError
+      data: lead
     });
 
   } catch (error) {
@@ -195,6 +186,59 @@ app.post('/api/enrich/batch', async (req: Request, res: Response) => {
     console.error('[API] Error in batch enrichment:', error);
     res.status(500).json({
       error: 'Failed to enrich profiles',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
+// RUTAS DE GOOGLE SHEETS (PASO 2)
+// ============================================================================
+
+// Listar hojas de cálculo del usuario
+app.get('/api/sheets/list', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.query.userId as string) || 'default';
+    const files = await sheetsService.listSpreadsheets(userId);
+
+    res.json({
+      success: true,
+      files: files
+    });
+  } catch (error) {
+    console.error('[API] Error listing sheets:', error);
+    res.status(500).json({
+      error: 'Failed to list spreadsheets',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Guardar datos en una hoja específica
+app.post('/api/sheets/save', async (req: Request, res: Response) => {
+  try {
+    const { userId = 'default', spreadsheetId, lead } = req.body;
+
+    if (!spreadsheetId || !lead) {
+      return res.status(400).json({
+        error: 'spreadsheetId and lead data are required'
+      });
+    }
+
+    console.log(`[API] Saving lead to sheet ${spreadsheetId} for user ${userId}`);
+
+    const sheetSaved = await sheetsService.appendLead(userId, spreadsheetId, lead);
+
+    if (sheetSaved) {
+      res.json({ success: true, message: 'Lead saved successfully' });
+    } else {
+      res.status(500).json({ success: false, error: 'Failed to save logic in Sheets' });
+    }
+
+  } catch (error) {
+    console.error('[API] Error saving to sheets:', error);
+    res.status(500).json({
+      error: 'Exception while saving to sheets',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

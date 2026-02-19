@@ -1,15 +1,36 @@
 {
     "manifest_version": 3,
-    "name": "Apollo LinkedIn Prospector",
-    "version": "1.0.0",
-    "description": "Extrae datos de perfiles de LinkedIn y los guarda en Google Sheets usando Apollo.",
+    "name": "MR Prospect",
+    "version": "1.1.0",
+    "description": "Extrae datos de perfiles de LinkedIn y los guarda en Google Sheets mediante un widget lateral interactivo.",
+    "background": {
+        "service_worker": "background.js"
+    },
     "action": {
-        "default_popup": "popup.html",
+        "default_title": "Abrir Prospector",
         "default_icon": {
             "16": "assets/icon16.png",
             "48": "assets/icon48.png",
             "128": "assets/icon128.png"
         }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://*.linkedin.com/*"
+            ],
+            "css": [
+                "content.css"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
     },
     "icons": {
         "16": "assets/icon16.png",
@@ -22,6 +43,8 @@
         "storage"
     ],
     "host_permissions": [
-        "https://*.linkedin.com/in/*"
+        "https://*.linkedin.com/*",
+        "http://localhost:3000/*",
+        "https://*.railway.app/*"
     ]
 }

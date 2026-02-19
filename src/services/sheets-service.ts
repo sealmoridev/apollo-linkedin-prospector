@@ -172,11 +172,46 @@ export class SheetsService {
     }
 
     /**
-     * Guarda un perfil en el Google Sheet
+     * Lista los Spreadsheets disponibles en el Google Drive del usuario
      */
-    async appendLead(userId: string, lead: EnrichedLead): Promise<boolean> {
+    async listSpreadsheets(userId: string) {
+        const userTokens = tokenStorage.getToken(userId);
+        if (!userTokens) throw new Error('User not authenticated with Google');
+
+        const oauth2Client = this.getOAuthClient();
+        oauth2Client.setCredentials({
+            access_token: userTokens.accessToken,
+            refresh_token: userTokens.refreshToken,
+            expiry_date: userTokens.expiryDate
+        });
+
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
         try {
-            const spreadsheetId = await this.getOrCreateSpreadsheet(userId);
+            const response = await drive.files.list({
+                q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+                fields: "files(id, name)",
+                orderBy: "modifiedTime desc",
+                pageSize: 50 // Traer los últimos 50 excels
+            });
+
+            return response.data.files || [];
+        } catch (error) {
+            console.error('❌ [Drive] Error listando spreadsheets:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Guarda un perfil en el Google Sheet específico
+     */
+    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead): Promise<boolean> {
+        try {
+            // Verificar si se solicitó crear una nueva hoja
+            if (spreadsheetId === 'NEW_SHEET') {
+                spreadsheetId = await this.getOrCreateSpreadsheet(userId);
+            }
+
             const sheets = this.getUserSheetsClient(userId);
 
             const emails = [lead.email, lead.personalEmail].filter(Boolean).join(', ');
