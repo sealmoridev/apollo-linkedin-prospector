@@ -12,9 +12,14 @@ export class SheetsService {
         this.clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
         // Por defecto asume localhost:3000 si no estamos en producción
-        const baseUrl = process.env.PUBLIC_WEBHOOK_URL
+        let baseUrl = process.env.PUBLIC_WEBHOOK_URL
             ? process.env.PUBLIC_WEBHOOK_URL.replace('/webhook/apollo', '')
             : 'http://localhost:3000';
+
+        if (baseUrl.endsWith('/')) {
+            baseUrl = baseUrl.slice(0, -1);
+        }
+
         this.redirectUri = `${baseUrl}/api/auth/google/callback`;
     }
 
