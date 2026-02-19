@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Opcional: Permitir que al hacer click en el icono de la extensión se fije/muestre el panel
 chrome.action.onClicked.addListener((tab) => {
-    if (tab.url.includes("linkedin.com/in/")) {
+    if (tab.url && tab.url.includes("linkedin.com/in/")) {
         // Enviar un mensaje al content script para abrir o cerrar el panel
         chrome.tabs.sendMessage(tab.id, { action: "togglePanel" });
     } else {

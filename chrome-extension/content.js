@@ -301,10 +301,10 @@ const initializeWidgetLogic = async () => {
                 data.files.forEach(file => {
                     const opt = document.createElement('option');
                     opt.value = file.id;
-                    opt.textContent = \`📄 \${file.name}\`;
+                    opt.textContent = `📄 ${file.name}`;
                     sheetSelect.appendChild(opt);
                 });
-                
+
                 // Si el usuario ya tiene hojas, intentar pre-seleccionar "Apollo Prospector Leads"
                 const defaultSheet = data.files.find(f => f.name.includes('Apollo Prospector Leads') || f.name.toLowerCase().includes('prospector'));
                 if (defaultSheet) {
@@ -327,14 +327,14 @@ const initializeWidgetLogic = async () => {
 
     extractBtn.addEventListener('click', async () => {
         if (!currentLinkedinUrl.includes('linkedin.com/in/')) return;
-        
+
         extractBtn.disabled = true;
         extractBtnText.textContent = 'Extrayendo...';
         extractLoader.style.display = 'inline-block';
         clearMessage();
 
         try {
-            const response = await fetch(`${ apiUrl } /api/enrich`, {
+            const response = await fetch(`${apiUrl} /api/enrich`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -355,7 +355,7 @@ const initializeWidgetLogic = async () => {
             }
         } catch (error) {
             console.error('Extraction error:', error);
-            showMessage(`Error extractivo: ${ error.message } `, true);
+            showMessage(`Error extractivo: ${error.message} `, true);
         } finally {
             extractBtn.disabled = false;
             extractBtnText.textContent = 'Extraer Datos de Apollo';
@@ -383,7 +383,7 @@ const initializeWidgetLogic = async () => {
         clearMessage();
 
         try {
-            const response = await fetch(`${ apiUrl } /api/sheets / save`, {
+            const response = await fetch(`${apiUrl} /api/sheets / save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -408,7 +408,7 @@ const initializeWidgetLogic = async () => {
             }
         } catch (error) {
             console.error('Save error:', error);
-            showMessage(`Error guardando: ${ error.message } `, true);
+            showMessage(`Error guardando: ${error.message} `, true);
             saveBtn.disabled = false;
             saveBtnText.textContent = 'Confirmar y Guardar';
             saveLoader.style.display = 'none';
