@@ -283,6 +283,13 @@ const initializeWidgetLogic = async () => {
         }
     });
 
+    // Detectar cuando el usuario vuelve a la pestaña de LinkedIn (probablemente después de loguearse en Google)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            checkAuthStatus(); // Refrescar estado de Auth silenciosamente
+        }
+    });
+
     optionsLink.addEventListener('click', () => {
         chrome.runtime.sendMessage({ action: "openOptionsPage" });
     });
@@ -334,7 +341,7 @@ const initializeWidgetLogic = async () => {
         clearMessage();
 
         try {
-            const response = await fetch(`${apiUrl} /api/enrich`, {
+            const response = await fetch(`${apiUrl}/api/enrich`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -383,7 +390,7 @@ const initializeWidgetLogic = async () => {
         clearMessage();
 
         try {
-            const response = await fetch(`${apiUrl} /api/sheets / save`, {
+            const response = await fetch(`${apiUrl}/api/sheets/save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
