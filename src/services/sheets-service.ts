@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { LeadProfile } from '../types';
+import { EnrichedLead } from '../types';
 import { tokenStorage } from './token-storage';
 
 export class SheetsService {
@@ -165,17 +165,17 @@ export class SheetsService {
     /**
      * Guarda un perfil en el Google Sheet
      */
-    async appendLead(userId: string, lead: LeadProfile): Promise<boolean> {
+    async appendLead(userId: string, lead: EnrichedLead): Promise<boolean> {
         try {
             const spreadsheetId = await this.getOrCreateSpreadsheet(userId);
             const sheets = this.getUserSheetsClient(userId);
 
             const emails = [lead.email, lead.personalEmail].filter(Boolean).join(', ');
-            const phones = lead.phoneNumbers?.join(', ') || 'Pendiente Webhook';
+            const phones = lead.phoneNumber || 'Pendiente Webhook';
 
             const values = [
                 [
-                    lead.name || 'Sin nombre',
+                    lead.fullName || lead.firstName || 'Sin nombre',
                     emails || 'Sin email',
                     lead.title || 'Sin título',
                     lead.company || 'Sin empresa',
@@ -196,7 +196,7 @@ export class SheetsService {
                 }
             });
 
-            console.log(`✅ Lead "${lead.name}" insertado para usuario ${userId}.`);
+            console.log(`✅ Lead "${lead.fullName}" insertado para usuario ${userId}.`);
             return true;
 
         } catch (error) {
