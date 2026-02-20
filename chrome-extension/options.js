@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isAuthenticated = false;
 
     // Utilidades UI
-    const showMessage = (element, msg, isError = false) => {
-        element.textContent = msg;
+    const showMessage = (element, msgHtml, isError = false) => {
+        element.innerHTML = msgHtml;
         element.className = `message-box ${isError ? 'msg-error' : 'msg-success'}`;
         element.style.display = 'block';
         setTimeout(() => { element.style.display = 'none'; }, 4000);
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         chrome.storage.sync.set({ apiUrl: urlToSave }, () => {
             currentApiUrl = urlToSave;
-            showMessage(apiMessage, '✅ URL Base guardada con éxito');
+            showMessage(apiMessage, '<div style="display:flex;align-items:center;gap:6px;"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> URL Base guardada con éxito</div>');
             // Re-checar el estado porque la URL cambió
             checkAuthStatus();
         });
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             authBtn.onclick = null;
 
             if (isAuthenticated) {
-                authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets (Auto-Sync)';
+                authStatusText.innerHTML = '<div style="display:flex;align-items:center;gap:6px;"><svg class="indicator" style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Conectado a Sheets (Auto-Sync)</div>';
                 authStatusText.className = 'status-text connected';
                 authBtn.style.display = 'none';
 
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 loadSheetsList();
 
             } else {
-                authStatusText.innerHTML = '<span class="indicator">🔴</span> Desconectado';
+                authStatusText.innerHTML = '<div style="display:flex;align-items:center;gap:6px;"><svg class="indicator" style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Desconectado</div>';
                 authStatusText.className = 'status-text disconnected';
 
                 authBtn.textContent = 'Conectar con Google';
@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (err) {
             console.error('Auth error', err);
-            authStatusText.innerHTML = '<span class="indicator">🟠</span> API Desconectada o Despertando';
+            authStatusText.innerHTML = '<div style="display:flex;align-items:center;gap:6px;"><svg class="indicator" style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> API Desconectada o Despertando</div>';
             authStatusText.className = 'status-text disconnected';
 
             authBtn.textContent = '🔄 Reintentar Conexión';
@@ -158,13 +158,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Opción para Crear Hoja Nueva
                 const newSheetOpt = document.createElement('option');
                 newSheetOpt.value = 'NEW_SHEET';
-                newSheetOpt.textContent = '✨ Crear mi primer Prospector Sheet';
+                newSheetOpt.textContent = 'Crear mi primer Prospector Sheet';
                 defaultSheetSelect.appendChild(newSheetOpt);
 
                 data.files.forEach(file => {
                     const opt = document.createElement('option');
                     opt.value = file.id;
-                    opt.textContent = `📄 ${file.name}`;
+                    opt.textContent = `[#] ${file.name}`;
                     defaultSheetSelect.appendChild(opt);
                 });
 
@@ -232,24 +232,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Update dropdown visually
                 const newOpt = document.createElement('option');
                 newOpt.value = data.spreadsheetId;
-                newOpt.textContent = `📄 ${customName}`;
+                newOpt.textContent = `[#] ${customName}`;
                 defaultSheetSelect.appendChild(newOpt);
                 defaultSheetSelect.value = data.spreadsheetId;
                 defaultSheetNameInput.style.display = 'none';
 
             } else if (selectedId) {
                 const selectedText = defaultSheetSelect.options[defaultSheetSelect.selectedIndex].text;
-                saveObj.defaultSheetName = selectedText.replace('📄 ', '');
+                saveObj.defaultSheetName = selectedText.replace('[#] ', '');
             }
 
             chrome.storage.sync.set(saveObj, () => {
-                showMessage(prefsMessage, '✅ Hoja Predeterminada configurada con éxito.');
+                showMessage(prefsMessage, '<div style="display:flex;align-items:center;gap:6px;"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Hoja Predeterminada configurada con éxito.</div>');
                 savePreferencesBtn.disabled = false;
                 savePreferencesBtn.innerHTML = origText;
             });
         } catch (err) {
             console.error(err);
-            showMessage(prefsMessage, '❌ Error al crear la hoja en Google Drive.', true);
+            showMessage(prefsMessage, '<div style="display:flex;align-items:center;gap:6px;"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Error al crear la hoja en Google Drive.</div>', true);
             savePreferencesBtn.disabled = false;
             savePreferencesBtn.innerHTML = origText;
         }

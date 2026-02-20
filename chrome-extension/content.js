@@ -64,7 +64,7 @@ const widgetHTML = `
         </div>
 
         <button id="apExtractBtn" class="ap-btn-primary" disabled>
-          <span class="ap-btn-text">Extraer Datos</span>
+          <span class="ap-btn-text" style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg> Extraer Datos</span>
           <span id="apExtractLoader" class="ap-loader"></span>
         </button>
       </div>
@@ -119,12 +119,12 @@ const widgetHTML = `
         </div>
 
         <button id="apSaveBtn" class="ap-btn-primary" style="background-color: #16a34a;">
-          <span class="ap-save-btn-text">Confirmar y Guardar</span>
+          <span class="ap-save-btn-text" style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</span>
           <span id="apSaveLoader" class="ap-loader"></span>
         </button>
         
         <button id="apCancelBtn" class="ap-btn-cancel">
-          Cancelar
+          <div style="display:flex; align-items:center; justify-content:center; gap:4px;"><svg style="width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cancelar</div>
         </button>
       </div>
 
@@ -189,8 +189,12 @@ const initializeWidgetLogic = async () => {
 
     // --- FUNCIONES UI GENERALES ---
 
-    const showMessage = (msg, isError = false) => {
-        resultDiv.textContent = msg;
+    const showMessage = (msgHtml, isError = false) => {
+        const icon = isError
+            ? '<svg style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
+            : '<svg style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+
+        resultDiv.innerHTML = `${icon} ${msgHtml}`;
         resultDiv.className = isError ? 'ap-result-message ap-result-error' : 'ap-result-message ap-result-success';
         resultDiv.style.display = 'block';
     };
@@ -209,7 +213,7 @@ const initializeWidgetLogic = async () => {
         // Resetear botones en caso de estar pegados
         if (saveBtn) {
             saveBtn.disabled = false;
-            saveBtnText.textContent = 'Confirmar y Guardar';
+            saveBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</div>';
             saveLoader.style.display = 'none';
         }
         if (cancelBtn) cancelBtn.disabled = false;
@@ -326,7 +330,7 @@ const initializeWidgetLogic = async () => {
 
                 if (!hasDefaultSheet) {
                     // Autenticado pero SIN hoja configurada
-                    authStatusText.innerHTML = '<span class="indicator">⚠️</span> Falta Configurar Hoja';
+                    authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M12 12v4"></path><path d="M12 20h.01"></path></svg> Falta Configurar Hoja';
                     authStatusText.className = 'ap-auth-status disconnected';
 
                     loginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
@@ -353,14 +357,14 @@ const initializeWidgetLogic = async () => {
                             ${sheetNameHtml} (Pendiente)
                         </div>`;
                     }
-                    authStatusText.innerHTML = `<span class="indicator">🟢</span> Enlazado a:<br>${sheetNameHtml}`;
+                    authStatusText.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom: 4px;"><svg class="indicator" style="width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Enlazado a:</div>${sheetNameHtml}`;
                     authStatusText.className = 'ap-auth-status connected';
                     loginBtn.style.display = 'none';
                     if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
                 }
             } else {
                 // NO autenticado
-                authStatusText.innerHTML = '<span class="indicator">🔴</span> Desconectado';
+                authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Desconectado';
                 authStatusText.className = 'ap-auth-status disconnected';
                 loginBtn.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 48 48" style="margin-right: 5px;">
@@ -387,7 +391,7 @@ const initializeWidgetLogic = async () => {
         } catch (err) {
             console.error('Auth error in checkAuthStatus:', err);
             authSection.style.display = 'block';
-            authStatusText.innerHTML = '<span class="indicator">🟠</span> API Desconectada o Despertando';
+            authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> API Desconectada o Despertando';
             authStatusText.className = 'ap-auth-status disconnected';
             extractBtn.disabled = true;
 
@@ -449,7 +453,7 @@ const initializeWidgetLogic = async () => {
             showMessage(`Error extractivo: ${error.message} `, true);
         } finally {
             extractBtn.disabled = false;
-            extractBtnText.textContent = 'Extraer Datos';
+            extractBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg> Extraer Datos</div>';
             extractLoader.style.display = 'none';
         }
     });
@@ -576,7 +580,7 @@ const initializeWidgetLogic = async () => {
 
                 // Restaurar estado del botón antes de ocultar
                 saveBtn.disabled = false;
-                saveBtnText.textContent = 'Confirmar y Guardar';
+                saveBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</div>';
                 saveLoader.style.display = 'none';
                 cancelBtn.disabled = false;
 
@@ -584,7 +588,7 @@ const initializeWidgetLogic = async () => {
                 resetToExtractState();
 
                 // Mostrar el texto solicitado para indicar que puede continuar
-                showMessage('✅ Perfil extraído, continúa con otro.');
+                showMessage('Perfil extraído, continúa con otro.');
             } else {
                 throw new Error(data.error || 'Error desconocido');
             }
@@ -592,7 +596,7 @@ const initializeWidgetLogic = async () => {
             console.error('Save error:', error);
             showMessage(`Error guardando: ${error.message} `, true);
             saveBtn.disabled = false;
-            saveBtnText.textContent = 'Confirmar y Guardar';
+            saveBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</div>';
             saveLoader.style.display = 'none';
             cancelBtn.disabled = false;
         }
