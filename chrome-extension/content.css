@@ -181,17 +181,33 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  background-color: white;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 14px 16px;
+  background: linear-gradient(to right, #ffffff, #f8fafc);
+  border: 1px solid rgba(153, 65, 192, 0.15);
   border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 2px 10px rgba(153, 65, 192, 0.05);
 }
 
 .ap-toggle-label {
   font-size: 13px;
   color: #334155;
   font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ap-credit-badge {
+  font-size: 11px;
+  color: #9941c0;
+  font-weight: 600;
+  background: rgba(153, 65, 192, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
 }
 
 /* Switch Styles */
@@ -234,11 +250,11 @@
 }
 
 input:checked+.ap-slider {
-  background-color: #34c759;
+  background-color: #9941c0;
 }
 
 input:focus+.ap-slider {
-  box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2);
+  box-shadow: 0 0 0 2px rgba(153, 65, 192, 0.2);
 }
 
 input:checked+.ap-slider:before {
@@ -249,7 +265,7 @@ input:checked+.ap-slider:before {
 .ap-btn-primary {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #9941c0 0%, #7e22ce 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -261,13 +277,13 @@ input:checked+.ap-slider:before {
   align-items: center;
   gap: 8px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 12px rgba(153, 65, 192, 0.25);
 }
 
 .ap-btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+  box-shadow: 0 6px 16px rgba(153, 65, 192, 0.35);
+  background: linear-gradient(135deg, #7e22ce 0%, #6b21a8 100%);
 }
 
 .ap-btn-primary:disabled {
@@ -275,6 +291,25 @@ input:checked+.ap-slider:before {
   box-shadow: none;
   cursor: not-allowed;
   color: #64748b;
+}
+
+/* Cancel Link Button */
+.ap-btn-cancel {
+  background: transparent;
+  color: #64748b;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px;
+  text-align: center;
+  transition: all 0.2s;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.ap-btn-cancel:hover {
+  color: #0f172a;
 }
 
 /* Loader */

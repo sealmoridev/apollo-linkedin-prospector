@@ -53,7 +53,10 @@ const widgetHTML = `
         </div>
 
         <div class="ap-toggle-group">
-          <span class="ap-toggle-label">Incluir Teléfono (Webhook)</span>
+          <div class="ap-toggle-label">
+            Incluir Teléfono (Webhook)
+            <span class="ap-credit-badge">⚡ Consume créditos</span>
+          </div>
           <label class="ap-switch">
             <input type="checkbox" id="apIncludePhone">
             <span class="ap-slider"></span>
@@ -113,7 +116,7 @@ const widgetHTML = `
           <span id="apSaveLoader" class="ap-loader"></span>
         </button>
         
-        <button id="apCancelBtn" class="ap-btn-primary" style="background-color: white; color: #64748b; border: 1px solid #cbd5e1;">
+        <button id="apCancelBtn" class="ap-btn-cancel">
           Cancelar
         </button>
       </div>
@@ -486,8 +489,6 @@ const initializeWidgetLogic = async () => {
             }
 
             if (data.success) {
-                showMessage('✅ ¡Lead guardado exitosamente en Google Sheets!');
-
                 // Si acabamos de crear una hoja nueva, obtener y guardar el id persistente
                 if (data.spreadsheetId && selectedSheetId === 'NEW_SHEET') {
                     await chrome.storage.sync.set({ defaultSheetId: data.spreadsheetId });
@@ -495,8 +496,11 @@ const initializeWidgetLogic = async () => {
                     checkAuthStatus();
                 }
 
-                // Auto-cerrar o resetear después de 3 segundos
-                setTimeout(resetToExtractState, 3000);
+                // Volver al paso 1 inmediatamente
+                resetToExtractState();
+
+                // Mostrar el texto solicitado para indicar que puede continuar
+                showMessage('✅ Perfil extraído, continúa con otro.');
             } else {
                 throw new Error(data.error || 'Error desconocido');
             }
