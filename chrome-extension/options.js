@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const preferencesSection = document.getElementById('preferencesSection');
     const defaultSheetSelect = document.getElementById('defaultSheetSelect');
+    const defaultSheetNameInput = document.getElementById('defaultSheetNameInput');
     const savePreferencesBtn = document.getElementById('savePreferencesBtn');
     const prefsMessage = document.getElementById('prefsMessage');
 
@@ -154,6 +155,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (data.success && data.files) {
                 defaultSheetSelect.innerHTML = '<option value="">(No usar predeterminado)</option>';
 
+                // Opción para Crear Hoja Nueva
+                const newSheetOpt = document.createElement('option');
+                newSheetOpt.value = 'NEW_SHEET';
+                newSheetOpt.textContent = '✨ Crear mi primer Prospector Sheet';
+                defaultSheetSelect.appendChild(newSheetOpt);
+
                 data.files.forEach(file => {
                     const opt = document.createElement('option');
                     opt.value = file.id;
@@ -164,6 +171,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Seleccionar valor guardado si existe
                 if (config.defaultSheetId) {
                     defaultSheetSelect.value = config.defaultSheetId;
+                }
+
+                // Mostrar input si NEW_SHEET quedó seleccionado por defecto (ej. si no hay hojas)
+                if (defaultSheetSelect.value === 'NEW_SHEET') {
+                    defaultSheetNameInput.style.display = 'block';
+                } else {
+                    defaultSheetNameInput.style.display = 'none';
                 }
 
                 defaultSheetSelect.disabled = false;
@@ -177,9 +191,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // Escuchar cambios en el select para mostrar/ocultar el input de nombre
+    defaultSheetSelect.addEventListener('change', () => {
+        if (defaultSheetSelect.value === 'NEW_SHEET') {
+            defaultSheetNameInput.style.display = 'block';
+        } else {
+            defaultSheetNameInput.style.display = 'none';
+        }
+    });
+
     savePreferencesBtn.addEventListener('click', () => {
         const selectedId = defaultSheetSelect.value;
         const saveObj = { defaultSheetId: selectedId };
+
+        if (selectedId === 'NEW_SHEET') {
+            // Si eligieron crear nueva, guardamos el nombre customizado o un default
+            saveObj.defaultSheetName = defaultSheetNameInput.value.trim() || 'Apollo Prospector Leads';
+        }
 
         chrome.storage.sync.set(saveObj, () => {
             showMessage(prefsMessage, '✅ Hoja Predeterminada guardada con éxito.');

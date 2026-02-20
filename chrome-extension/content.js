@@ -473,7 +473,9 @@ const initializeWidgetLogic = async () => {
 
         let customSheetName = undefined;
         if (selectedSheetId === 'NEW_SHEET') {
-            customSheetName = sheetNameInput.value.trim() || 'Apollo Prospector Leads';
+            const storageConfig = await chrome.storage.sync.get(['defaultSheetName']);
+            // Prioriza el input visible, luego el de Opciones, luego el fallback default
+            customSheetName = sheetNameInput.value.trim() || storageConfig.defaultSheetName || 'Apollo Prospector Leads';
         }
 
         saveBtn.disabled = true;
