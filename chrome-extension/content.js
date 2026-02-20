@@ -249,9 +249,15 @@ const initializeWidgetLogic = async () => {
     const checkAuthStatus = async () => {
         try {
             const result = await chrome.storage.sync.get(['apiUrl']);
-            if (result.apiUrl) apiUrl = result.apiUrl;
+            if (result.apiUrl) {
+                // Limpiar slash final si el usuario lo puso por error
+                apiUrl = result.apiUrl.replace(/\/$/, "");
+            }
 
             const response = await fetch(`${apiUrl}/api/auth/status?userId=${userId}`);
+            if (!response.ok) {
+                throw new Error(`Servidor respondió con ${response.status}`);
+            }
             const data = await response.json();
 
             isAuthenticated = data.authenticated;
@@ -264,8 +270,9 @@ const initializeWidgetLogic = async () => {
 
             if (isAuthenticated) {
                 const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
+                const hasDefaultSheet = storageConfig && storageConfig.defaultSheetId;
 
-                if (!storageConfig.defaultSheetId) {
+                if (!hasDefaultSheet) {
                     // Autenticado pero SIN hoja configurada
                     authStatusText.innerHTML = '<span class="indicator">⚠️</span> Falta Configurar Hoja';
                     authStatusText.className = 'ap-auth-status disconnected'; // rojo/naranja
@@ -310,12 +317,14 @@ const initializeWidgetLogic = async () => {
             // Re-asignar referencia global a newLoginBtn
             // (El closure lo capturará bien, pero para re-renders)
         } catch (err) {
-            console.error('Auth error', err);
+            console.error('Auth error in checkAuthStatus:', err);
             authSection.style.display = 'block';
             authStatusText.innerHTML = '<span class="indicator">🟠</span> Servidor inalcanzable';
             authStatusText.className = 'ap-auth-status disconnected';
-            // Dejar el botón viejo pero escondido
-            loginBtn.style.display = 'none';
+
+            // Si el servidor es inalcanzable es posible que necesitemos mostrar opciones (ej. para cambiar URL API)
+            // Por el momento mantenemos oculto el botón o mostramos el configurador
+            if (loginBtn) loginBtn.style.display = 'none';
         }
     };
 

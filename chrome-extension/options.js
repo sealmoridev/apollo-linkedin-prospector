@@ -69,8 +69,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         authStatusText.innerHTML = 'Cargando...';
         authStatusText.className = 'status-text';
 
+        // Sanitizar URL antes de usar
+        if (currentApiUrl) {
+            currentApiUrl = currentApiUrl.replace(/\/$/, "");
+        }
+
         try {
             const response = await fetch(`${currentApiUrl}/api/auth/status?userId=${userId}`);
+
+            if (!response.ok) {
+                throw new Error(`Servidor respondió con ${response.status}`);
+            }
+
             const data = await response.json();
 
             isAuthenticated = data.authenticated;
