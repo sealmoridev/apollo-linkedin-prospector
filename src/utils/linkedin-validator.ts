@@ -28,24 +28,25 @@ export function validateLinkedInUrl(url: string): LinkedInUrlValidationResult {
   url = url.trim();
 
   // Regex para validar URLs de LinkedIn
-  // Soporta: /in/username, /pub/username/x/y/z
-  const linkedInRegex = /^https?:\/\/(www\.)?linkedin\.com\/(in|pub)\/([a-zA-Z0-9\-]+)(\/.*)?$/;
-  
+  // Soporta: /in/username, /pub/username/x/y/z e internacional
+  // Se cambia [a-zA-Z0-9\-\%]+ por algo más tolerante debido a tildes o caracteres especiales
+  const linkedInRegex = /^https?:\/\/(www\.)?linkedin\.com\/(in|pub)\/([^\/?]+)(\/.*)?$/;
+
   const match = url.match(linkedInRegex);
-  
+
   if (!match) {
     return {
       isValid: false,
-      error: 'Invalid LinkedIn profile URL format'
+      error: `Invalid LinkedIn profile URL format: ${url}`
     };
   }
 
   const profileType = match[2]; // 'in' o 'pub'
   const identifier = match[3]; // username o profile ID
-  
+
   // Normalizar a formato estándar
   const normalizedUrl = `https://www.linkedin.com/${profileType}/${identifier}`;
-  
+
   return {
     isValid: true,
     normalizedUrl,
