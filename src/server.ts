@@ -359,6 +359,25 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
   }
 });
 
+// 4. Desconectar cuenta de Google
+app.post('/api/auth/disconnect', (req: Request, res: Response) => {
+  try {
+    const { userId = 'default' } = req.body;
+
+    // Eliminar los tokens de la memoria/disco
+    tokenStorage.deleteToken(userId);
+    console.log(`✅ [OAuth] Tokens eliminados para el usuario: ${userId}`);
+
+    res.json({ success: true, message: 'Disconnected successfully' });
+  } catch (error) {
+    console.error('[API] Error disconnecting user:', error);
+    res.status(500).json({
+      error: 'Failed to disconnect',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // ============================================================================
 // WEBHOOK DE APOLLO (manejado por WebhookServer)
 // ============================================================================
