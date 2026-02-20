@@ -122,10 +122,10 @@ export class SheetsService {
             // 2. Darle formato a los Headers (fila 1)
             await sheets.spreadsheets.values.update({
                 spreadsheetId,
-                range: 'Leads Base!A1:H1',
+                range: 'Leads Base!A1:I1',
                 valueInputOption: 'USER_ENTERED',
                 requestBody: {
-                    values: [['Nombre', 'Emails', 'Título', 'Empresa', 'Locación', 'Teléfonos', 'URL LinkedIn', 'Fecha Captura']]
+                    values: [['Nombre', 'Emails', 'Título', 'Empresa', 'Locación', 'Teléfonos', 'URL LinkedIn', 'Fecha Captura', 'Estado del Email']]
                 }
             });
 
@@ -141,7 +141,7 @@ export class SheetsService {
                                     startRowIndex: 0,
                                     endRowIndex: 1,
                                     startColumnIndex: 0,
-                                    endColumnIndex: 8
+                                    endColumnIndex: 9
                                 },
                                 cell: {
                                     userEnteredFormat: {
@@ -228,13 +228,14 @@ export class SheetsService {
                     lead.location || 'Sin locación',
                     phones,
                     lead.linkedinUrl || '',
-                    new Date().toISOString()
+                    new Date().toISOString(),
+                    (lead as any).emailStatus || 'Sin verificar'
                 ]
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId: spreadsheetId,
-                range: 'Leads Base!A:H',
+                range: 'Leads Base!A:I',
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'OVERWRITE',
                 requestBody: {

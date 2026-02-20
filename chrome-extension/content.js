@@ -99,9 +99,13 @@ const widgetHTML = `
             </div>
             <div class="ap-data-row-modern">
                 <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg></div>
-                <div class="ap-data-content">
+                <div class="ap-data-content" style="flex:1; min-width: 0;">
                     <div class="ap-data-label-modern">Email</div>
-                    <div class="ap-data-value-modern" id="apDataEmail"></div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <div class="ap-data-value-modern" id="apDataEmail" style="word-break: break-all;"></div>
+                        <button id="apValidateEmailBtn" class="ap-btn-validate" style="display: none;">Validar</button>
+                        <div id="apEmailBadge" class="ap-badge" style="display: none;"></div>
+                    </div>
                 </div>
             </div>
             <div class="ap-data-row-modern">
@@ -162,6 +166,9 @@ const initializeWidgetLogic = async () => {
 
     const currentUrlEl = document.getElementById('apCurrentUrl');
     const includePhoneToggle = document.getElementById('apIncludePhone');
+    const validateEmailBtn = document.getElementById('apValidateEmailBtn');
+    const emailBadge = document.getElementById('apEmailBadge');
+
     const extractBtn = document.getElementById('apExtractBtn');
     const extractBtnText = extractBtn.querySelector('.ap-btn-text');
     const extractLoader = document.getElementById('apExtractLoader');
@@ -220,8 +227,20 @@ const initializeWidgetLogic = async () => {
         const titleStr = leadData.title || 'Sin título';
         const companyStr = leadData.company || 'Sin empresa';
         document.getElementById('apDataTitleCompany').textContent = `${titleStr} - ${companyStr}`;
-        document.getElementById('apDataEmail').textContent = leadData.email || leadData.personalEmail || 'Sin email';
+        const emails = [leadData.email, leadData.personalEmail].filter(Boolean).join(', ');
+        document.getElementById('apDataEmail').textContent = emails || 'Sin email';
         document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
+
+        // Reset and display validate button
+        if (emails && validateEmailBtn && emailBadge) {
+            validateEmailBtn.style.display = 'flex';
+            validateEmailBtn.disabled = false;
+            validateEmailBtn.innerHTML = 'Validar';
+            emailBadge.style.display = 'none';
+        } else if (validateEmailBtn && emailBadge) {
+            validateEmailBtn.style.display = 'none';
+            emailBadge.style.display = 'none';
+        }
     };
 
     // --- LÓGICA DE ABRIR/CERRAR ---
@@ -456,6 +475,53 @@ const initializeWidgetLogic = async () => {
                 copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
                 setTimeout(() => { copyBtn.innerHTML = originalHtml; }, 2000);
             }).catch(err => console.error('Error copiando:', err));
+        });
+    }
+
+    if (validateEmailBtn) {
+        validateEmailBtn.addEventListener('click', async () => {
+            if (!extractedLeadData) return;
+            // Get the first available email to validate
+            const emailToVerify = extractedLeadData.email || extractedLeadData.personalEmail;
+            if (!emailToVerify) return;
+
+            validateEmailBtn.disabled = true;
+            validateEmailBtn.innerHTML = '<span class="ap-loader" style="display:inline-block; border-color:#334155 transparent transparent transparent; width:12px; height:12px; margin-right: 4px;"></span>...';
+
+            try {
+                const response = await fetch(`${apiUrl}/api/verify-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailToVerify })
+                });
+
+                const data = await response.json();
+
+                validateEmailBtn.style.display = 'none';
+                emailBadge.style.display = 'inline-flex';
+
+                if (data.status === 'valid') {
+                    emailBadge.className = 'ap-badge ap-badge-valid';
+                    emailBadge.innerHTML = '✅ Válido';
+                } else if (data.status === 'invalid') {
+                    emailBadge.className = 'ap-badge ap-badge-invalid';
+                    emailBadge.innerHTML = '❌ Inválido';
+                } else if (data.status === 'catch_all') {
+                    emailBadge.className = 'ap-badge ap-badge-catchall';
+                    emailBadge.innerHTML = '⚠️ Catch-All';
+                } else {
+                    emailBadge.className = 'ap-badge ap-badge-unknown';
+                    emailBadge.innerHTML = '❔ Error/Desc';
+                }
+
+                // Attach to memory model for Google Sheets passing
+                extractedLeadData.emailStatus = data.status;
+
+            } catch (err) {
+                console.error('Validation error:', err);
+                validateEmailBtn.disabled = false;
+                validateEmailBtn.innerHTML = 'Reintentar';
+            }
         });
     }
 

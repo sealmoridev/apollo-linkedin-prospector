@@ -5,6 +5,7 @@ import { EnrichmentService } from './services/enrichment-service';
 import { SheetsService } from './services/sheets-service';
 import { tokenStorage } from './services/token-storage';
 import { validateLinkedInUrl } from './utils/linkedin-validator';
+import { millionVerifyService } from './services/million-verify-service';
 import cors from 'cors';
 
 dotenv.config();
@@ -186,6 +187,27 @@ app.post('/api/enrich/batch', async (req: Request, res: Response) => {
     console.error('[API] Error in batch enrichment:', error);
     res.status(500).json({
       error: 'Failed to enrich profiles',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Validar correo manualmente (MillionVerify)
+app.post('/api/verify-email', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const verificationResult = await millionVerifyService.verifyEmail(email);
+    res.json(verificationResult);
+
+  } catch (error) {
+    console.error('[API] Error validating email:', error);
+    res.status(500).json({
+      error: 'Exception while validating email',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
