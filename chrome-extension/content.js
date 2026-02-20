@@ -248,6 +248,10 @@ const initializeWidgetLogic = async () => {
 
     const checkAuthStatus = async () => {
         try {
+            authStatusText.innerHTML = '<span class="ap-loader" style="display:inline-block; border-color:#0f172a transparent transparent transparent; width:12px; height:12px; margin-right: 4px;"></span> Conectando...';
+            // Desactiva el botón de login durante la carga para evitar spam
+            loginBtn.style.display = 'none';
+
             const result = await chrome.storage.sync.get(['apiUrl']);
             if (result.apiUrl) {
                 // Limpiar slash final si el usuario lo puso por error
@@ -263,10 +267,8 @@ const initializeWidgetLogic = async () => {
             isAuthenticated = data.authenticated;
             authSection.style.display = 'block';
 
-            // Remover listeners previos de loginBtn clonando el nodo para evitar ejecuciones dobles
-            const oldLoginBtn = loginBtn;
-            const newLoginBtn = oldLoginBtn.cloneNode(true);
-            oldLoginBtn.parentNode.replaceChild(newLoginBtn, oldLoginBtn);
+            // Limpiar acciones previas
+            loginBtn.onclick = null;
 
             if (isAuthenticated) {
                 const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
@@ -274,32 +276,30 @@ const initializeWidgetLogic = async () => {
 
                 if (!hasDefaultSheet) {
                     // Autenticado pero SIN hoja configurada
-                    // En vez de rojo chillón, usamos amarillo/naranja y un texto más amigable
                     authStatusText.innerHTML = '<span class="indicator">⚠️</span> Falta Configurar Hoja';
                     authStatusText.className = 'ap-auth-status disconnected';
 
-                    newLoginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
-                    newLoginBtn.style.display = 'flex';
-                    newLoginBtn.onclick = () => chrome.runtime.sendMessage({ action: "openOptionsPage" });
+                    loginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
+                    loginBtn.style.display = 'flex';
+                    loginBtn.onclick = () => chrome.runtime.sendMessage({ action: "openOptionsPage" });
 
-                    // Solo deshabilitar si está en la URL incorrecta, no castigarlo
                     if (!currentLinkedinUrl.includes('linkedin.com/in/')) {
                         extractBtn.disabled = true;
                     } else {
-                        extractBtn.disabled = false; // Permitimos extraer, fallará elegante en el paso 2
+                        extractBtn.disabled = false;
                     }
                 } else {
                     // Autenticado y CON hoja
                     authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets (Auto-Sync)';
                     authStatusText.className = 'ap-auth-status connected';
-                    newLoginBtn.style.display = 'none';
+                    loginBtn.style.display = 'none';
                     if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
                 }
             } else {
                 // NO autenticado
                 authStatusText.innerHTML = '<span class="indicator">🔴</span> Desconectado';
                 authStatusText.className = 'ap-auth-status disconnected';
-                newLoginBtn.innerHTML = `
+                loginBtn.innerHTML = `
                   <svg width="18" height="18" viewBox="0 0 48 48" style="margin-right: 5px;">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.7 17.74 9.5 24 9.5z"></path>
                     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
@@ -308,10 +308,10 @@ const initializeWidgetLogic = async () => {
                     <path fill="none" d="M0 0h48v48H0z"></path>
                   </svg>
                   Conectar con Google`;
-                newLoginBtn.style.display = 'flex';
+                loginBtn.style.display = 'flex';
                 extractBtn.disabled = true;
 
-                newLoginBtn.addEventListener('click', async () => {
+                loginBtn.onclick = async () => {
                     try {
                         const res = await fetch(`${apiUrl}/api/auth/google?userId=${userId}`);
                         const d = await res.json();
@@ -319,20 +319,20 @@ const initializeWidgetLogic = async () => {
                     } catch (err) {
                         showMessage('Error de conexión con el Servidor.', true);
                     }
-                });
+                };
             }
-
-            // Re-asignar referencia global a newLoginBtn
-            // (El closure lo capturará bien, pero para re-renders)
         } catch (err) {
             console.error('Auth error in checkAuthStatus:', err);
             authSection.style.display = 'block';
-            authStatusText.innerHTML = '<span class="indicator">🟠</span> Servidor inalcanzable';
+            authStatusText.innerHTML = '<span class="indicator">🟠</span> API Desconectada o Despertando';
             authStatusText.className = 'ap-auth-status disconnected';
+            extractBtn.disabled = true;
 
-            // Si el servidor es inalcanzable es posible que necesitemos mostrar opciones (ej. para cambiar URL API)
-            // Por el momento mantenemos oculto el botón o mostramos el configurador
-            if (loginBtn) loginBtn.style.display = 'none';
+            loginBtn.innerHTML = '🔄 Reintentar Conexión';
+            loginBtn.style.display = 'flex';
+            loginBtn.onclick = async () => {
+                await checkAuthStatus();
+            };
         }
     };
 

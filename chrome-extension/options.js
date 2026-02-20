@@ -66,8 +66,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- SECCIÓN 2: ESTADO DE OAUTH ---
     const checkAuthStatus = async () => {
-        authStatusText.innerHTML = 'Cargando...';
+        authStatusText.innerHTML = 'Conectando con Servidor...';
         authStatusText.className = 'status-text';
+        authBtn.style.display = 'none';
 
         // Sanitizar URL antes de usar
         if (currentApiUrl) {
@@ -85,8 +86,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             isAuthenticated = data.authenticated;
 
+            // Limpiar eventos previos para evitar ejecuciones dobles si se reconecta
+            authBtn.onclick = null;
+
             if (isAuthenticated) {
-                authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets';
+                authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets (Auto-Sync)';
                 authStatusText.className = 'status-text connected';
                 authBtn.style.display = 'none';
 
@@ -98,7 +102,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 authStatusText.innerHTML = '<span class="indicator">🔴</span> Desconectado';
                 authStatusText.className = 'status-text disconnected';
+
+                authBtn.textContent = 'Conectar con Google';
                 authBtn.style.display = 'inline-flex';
+                authBtn.onclick = async () => {
+                    try {
+                        const res = await fetch(`${currentApiUrl}/api/auth/google?userId=${userId}`);
+                        const d = await res.json();
+                        if (d.url) window.open(d.url, '_blank');
+                    } catch (err) {
+                        alert('Error de conexión con el Servidor Backend: ' + currentApiUrl);
+                    }
+                };
 
                 // Bloquear Pestaña de Preferencias
                 preferencesSection.style.opacity = '0.5';
@@ -108,23 +123,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (err) {
             console.error('Auth error', err);
-            authStatusText.innerHTML = '<span class="indicator">🟠</span> Servidor Inaccesible';
+            authStatusText.innerHTML = '<span class="indicator">🟠</span> API Desconectada o Despertando';
             authStatusText.className = 'status-text disconnected';
-            authBtn.style.display = 'none';
+
+            authBtn.textContent = '🔄 Reintentar Conexión';
+            authBtn.style.display = 'inline-flex';
+            authBtn.onclick = () => checkAuthStatus();
         }
     };
 
-    authBtn.addEventListener('click', async () => {
-        try {
-            const response = await fetch(`${currentApiUrl}/api/auth/google?userId=${userId}`);
-            const data = await response.json();
-            if (data.url) {
-                window.open(data.url, '_blank');
-            }
-        } catch (err) {
-            alert('Error de conexión con el Servidor Backend: ' + currentApiUrl);
-        }
-    });
+
 
     // Detectar cuando el usuario vuelve a la tab después de autenticarse
     document.addEventListener('visibilitychange', () => {
