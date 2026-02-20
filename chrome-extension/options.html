@@ -166,46 +166,163 @@
             cursor: not-allowed;
         }
 
-        select {
-            padding: 12px 12px 12px 38px;
+        /* --- Custom Combobox --- */
+        .custom-select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .custom-select-trigger {
+            padding: 12px 38px 12px 12px;
             border: 1px solid #cbd5e1;
             border-radius: 10px;
             font-size: 14px;
             background-color: white;
-            background-image: url('data:image/svg+xml;utf8,<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h2"></path><path d="M8 17h2"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg>');
-            background-repeat: no-repeat;
-            background-position: 12px center;
-            outline: none;
-            width: 100%;
-            transition: all 0.2s;
             cursor: pointer;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+            user-select: none;
+            min-height: 44px;
+            /* Ensure uniform height even when empty */
+            box-sizing: border-box;
         }
 
-        /* Add a custom dropdown arrow since we hid the default appearance */
-        .select-wrapper {
-            position: relative;
+        .custom-select-trigger:focus,
+        .custom-select-wrapper.open .custom-select-trigger {
+            border-color: #9941c0;
+            box-shadow: 0 0 0 3px rgba(153, 65, 192, 0.1);
+            outline: none;
         }
 
-        .select-wrapper::after {
-            content: '';
+        .custom-select-trigger.disabled {
+            background-color: #f1f5f9;
+            color: #94a3b8;
+            cursor: not-allowed;
+            border-color: #e2e8f0;
+        }
+
+        .custom-select-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .custom-select-arrow {
             position: absolute;
             right: 14px;
             top: 50%;
             transform: translateY(-50%);
-            width: 12px;
-            height: 12px;
-            background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="6 9 12 15 18 9"></polyline></svg>');
-            background-repeat: no-repeat;
-            background-position: center;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             pointer-events: none;
+            transition: transform 0.2s;
         }
 
-        select:focus {
-            border-color: #9941c0;
-            box-shadow: 0 0 0 3px rgba(153, 65, 192, 0.1);
+        .custom-select-wrapper.open .custom-select-arrow {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        .custom-select-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .custom-select-wrapper.open .custom-select-dropdown {
+            display: flex;
+        }
+
+        .custom-select-search {
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .custom-select-search input {
+            border: none;
+            background: transparent;
+            width: 100%;
+            font-size: 13px;
+            outline: none;
+            padding: 0;
+            box-shadow: none;
+        }
+
+        .custom-select-search input:focus {
+            box-shadow: none;
+        }
+
+        .custom-select-search .search-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .custom-options-list {
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .custom-option {
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #334155;
+            transition: background 0.15s;
+        }
+
+        .custom-option:hover,
+        .custom-option.focused {
+            background-color: #f1f5f9;
+        }
+
+        .custom-option.selected {
+            background-color: #f8fafc;
+            color: #9941c0;
+            font-weight: 500;
+        }
+
+        .custom-option.action-option {
+            border-top: 1px solid #f1f5f9;
+            color: #2563eb;
+            font-weight: 500;
+            background: #fafafa;
+        }
+
+        .custom-option.action-option:hover {
+            background: #f1f5f9;
+        }
+
+        .no-results {
+            padding: 16px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 13px;
         }
 
         .message-box {
@@ -314,11 +431,33 @@
                 </svg> Preferencias de Guardado</h2>
             <div class="card">
                 <div class="form-group">
-                    <label for="defaultSheetSelect">Hoja Destino Predeterminada</label>
-                    <div class="select-wrapper">
-                        <select id="defaultSheetSelect" disabled>
-                            <option value="">Conecta a Google primero...</option>
-                        </select>
+                    <label>Hoja Destino Predeterminada</label>
+                    <div class="custom-select-wrapper" id="customSheetSelectWrapper">
+                        <div class="custom-select-trigger disabled" id="customSheetTrigger" tabindex="0">
+                            <span class="custom-select-value" id="customSheetSelectedValue">Conecta a Google
+                                primero...</span>
+                            <div class="custom-select-arrow">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="custom-select-dropdown" id="customSheetDropdown">
+                            <div class="custom-select-search">
+                                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="#94a3b8"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input type="text" id="customSheetSearchInput" placeholder="Buscar base de datos..."
+                                    autocomplete="off">
+                            </div>
+                            <div class="custom-options-list" id="customSheetOptionsList">
+                                <!-- Opciones inyectadas por JS -->
+                            </div>
+                            <!-- La opción de crear se inyectará dinámicamente si es necesario, o la manejamos en JS -->
+                        </div>
                     </div>
 
                     <input type="text" id="defaultSheetNameInput" placeholder="Nombre de tu nueva Base de Datos..."

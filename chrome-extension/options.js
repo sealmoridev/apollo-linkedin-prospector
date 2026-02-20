@@ -8,7 +8,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const authBtn = document.getElementById('authBtn');
 
     const preferencesSection = document.getElementById('preferencesSection');
-    const defaultSheetSelect = document.getElementById('defaultSheetSelect');
+    const customSheetSelectWrapper = document.getElementById('customSheetSelectWrapper');
+    const customSheetTrigger = document.getElementById('customSheetTrigger');
+    const customSheetSelectedValue = document.getElementById('customSheetSelectedValue');
+    const customSheetDropdown = document.getElementById('customSheetDropdown');
+    const customSheetSearchInput = document.getElementById('customSheetSearchInput');
+    const customSheetOptionsList = document.getElementById('customSheetOptionsList');
+
     const defaultSheetNameInput = document.getElementById('defaultSheetNameInput');
     const savePreferencesBtn = document.getElementById('savePreferencesBtn');
     const prefsMessage = document.getElementById('prefsMessage');
@@ -17,6 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentApiUrl = 'http://localhost:3000';
     let userId = null;
     let isAuthenticated = false;
+    let allSheets = [];
+    let selectedSheetId = '';
+    let selectedSheetName = '';
 
     // Utilidades UI
     const showMessage = (element, msgHtml, isError = false) => {
@@ -42,11 +51,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Cargar config inicial
     await getUserId();
-    const config = await chrome.storage.sync.get(['apiUrl', 'defaultSheetId']);
+    const config = await chrome.storage.sync.get(['apiUrl', 'defaultSheetId', 'defaultSheetName']);
 
     if (config.apiUrl) {
         currentApiUrl = config.apiUrl;
         apiUrlInput.value = currentApiUrl;
+    }
+
+    if (config.defaultSheetId) {
+        selectedSheetId = config.defaultSheetId;
+        selectedSheetName = config.defaultSheetName || 'Documento Guardado';
     }
 
     // --- SECCIÓN 1: GUARDAR API URL ---
@@ -119,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Bloquear Pestaña de Preferencias
                 preferencesSection.style.opacity = '0.5';
                 preferencesSection.style.pointerEvents = 'none';
-                defaultSheetSelect.disabled = true;
+                customSheetTrigger.classList.add('disabled');
                 savePreferencesBtn.disabled = true;
             }
         } catch (err) {
@@ -133,8 +147,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-
-
     // Detectar cuando el usuario vuelve a la tab después de autenticarse
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
@@ -143,73 +155,128 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- SECCIÓN 3: PREFERENCIAS (SHEETS) ---
+
+    // Cerrar dropdown al hacer click afuera
+    document.addEventListener('click', (e) => {
+        if (!customSheetSelectWrapper.contains(e.target)) {
+            customSheetSelectWrapper.classList.remove('open');
+        }
+    });
+
+    customSheetTrigger.addEventListener('click', () => {
+        if (customSheetTrigger.classList.contains('disabled')) return;
+        customSheetSelectWrapper.classList.toggle('open');
+        if (customSheetSelectWrapper.classList.contains('open')) {
+            customSheetSearchInput.value = ''; // Reset search
+            renderCustomOptions(allSheets);
+            customSheetSearchInput.focus();
+        }
+    });
+
+    customSheetSearchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const filtered = allSheets.filter(sheet => sheet.name.toLowerCase().includes(query));
+        renderCustomOptions(filtered);
+    });
+
+    const renderCustomOptions = (sheets) => {
+        customSheetOptionsList.innerHTML = ''; // Clear
+
+        if (sheets.length === 0) {
+            customSheetOptionsList.innerHTML = '<div class="no-results">No se encontraron bases de datos</div>';
+        }
+
+        // 1. (Opcional) Opción para no usar predeterminado
+        const nullOpt = document.createElement('div');
+        nullOpt.className = 'custom-option';
+        nullOpt.innerHTML = '<span style="color: #64748b; font-style: italic;">(No usar predeterminado)</span>';
+        nullOpt.addEventListener('click', () => handleOptionSelect('', '(No usar predeterminado)'));
+        customSheetOptionsList.appendChild(nullOpt);
+
+        // 2. Opciones de Google Sheets
+        sheets.forEach(file => {
+            const opt = document.createElement('div');
+            opt.className = `custom-option ${selectedSheetId === file.id ? 'selected' : ''}`;
+            opt.innerHTML = `<svg style="width:14px; height:14px; color:#10b981; flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h2"></path><path d="M8 17h2"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg> <span>${file.name}</span>`;
+            opt.addEventListener('click', () => handleOptionSelect(file.id, file.name));
+            customSheetOptionsList.appendChild(opt);
+        });
+
+        // 3. Opción de Crear Nuevo (Fija al final)
+        const newOpt = document.createElement('div');
+        newOpt.className = 'custom-option action-option';
+        newOpt.innerHTML = '<svg style="width:14px; height:14px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg> Crear mi primer Prospector Sheet';
+        newOpt.addEventListener('click', () => handleOptionSelect('NEW_SHEET', 'Crear Base de Datos Nueva...'));
+        customSheetOptionsList.appendChild(newOpt);
+    };
+
+    const handleOptionSelect = (id, name) => {
+        selectedSheetId = id;
+        selectedSheetName = name;
+
+        // Update Trigger UI
+        if (id === 'NEW_SHEET') {
+            customSheetSelectedValue.innerHTML = `<span style="color:#2563eb; font-weight: 500;">${name}</span>`;
+            defaultSheetNameInput.style.display = 'block';
+        } else if (id === '') {
+            customSheetSelectedValue.innerHTML = '<span style="color:#64748b;">(No usar predeterminado)</span>';
+            defaultSheetNameInput.style.display = 'none';
+        } else {
+            customSheetSelectedValue.innerHTML = `<svg style="width:16px; height:16px; color:#10b981; flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h2"></path><path d="M8 17h2"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg> <span style="font-weight: 500; color: #0f172a;">${name}</span>`;
+            defaultSheetNameInput.style.display = 'none';
+        }
+
+        customSheetSelectWrapper.classList.remove('open');
+        savePreferencesBtn.disabled = false;
+    };
+
     const loadSheetsList = async () => {
-        defaultSheetSelect.disabled = true;
+        customSheetTrigger.classList.add('disabled');
+        customSheetSelectedValue.innerText = 'Cargando hojas de cálculo...';
         savePreferencesBtn.disabled = true;
-        defaultSheetSelect.innerHTML = '<option value="">Cargando hojas de cálculo...</option>';
 
         try {
             const res = await fetch(`${currentApiUrl}/api/sheets/list?userId=${userId}`);
             const data = await res.json();
 
             if (data.success && data.files) {
-                defaultSheetSelect.innerHTML = '<option value="">(No usar predeterminado)</option>';
+                allSheets = data.files;
+                customSheetTrigger.classList.remove('disabled');
 
-                // Opción para Crear Hoja Nueva
-                const newSheetOpt = document.createElement('option');
-                newSheetOpt.value = 'NEW_SHEET';
-                newSheetOpt.textContent = 'Crear mi primer Prospector Sheet';
-                defaultSheetSelect.appendChild(newSheetOpt);
-
-                data.files.forEach(file => {
-                    const opt = document.createElement('option');
-                    opt.value = file.id;
-                    opt.textContent = file.name;
-                    defaultSheetSelect.appendChild(opt);
-                });
-
-                // Seleccionar valor guardado si existe
-                if (config.defaultSheetId) {
-                    defaultSheetSelect.value = config.defaultSheetId;
-                }
-
-                // Mostrar input si NEW_SHEET quedó seleccionado por defecto (ej. si no hay hojas)
-                if (defaultSheetSelect.value === 'NEW_SHEET') {
-                    defaultSheetNameInput.style.display = 'block';
+                // Determine initial selected text based on existing config, or default
+                if (selectedSheetId === 'NEW_SHEET') {
+                    handleOptionSelect('NEW_SHEET', 'Crear Base de Datos Nueva...');
+                } else if (selectedSheetId && selectedSheetId !== '') {
+                    // find name
+                    const found = allSheets.find(s => s.id === selectedSheetId);
+                    if (found) {
+                        handleOptionSelect(found.id, found.name);
+                    } else {
+                        handleOptionSelect(selectedSheetId, selectedSheetName);
+                    }
                 } else {
-                    defaultSheetNameInput.style.display = 'none';
+                    handleOptionSelect('', '(No usar predeterminado)');
                 }
 
-                defaultSheetSelect.disabled = false;
                 savePreferencesBtn.disabled = false;
             } else {
-                defaultSheetSelect.innerHTML = '<option value="">Error cargando la lista</option>';
+                customSheetSelectedValue.innerText = 'Error cargando la lista';
             }
         } catch (err) {
             console.error('Error fetching sheets', err);
-            defaultSheetSelect.innerHTML = '<option value="">Fallo de red</option>';
+            customSheetSelectedValue.innerText = 'Fallo de red';
         }
     };
 
-    // Escuchar cambios en el select para mostrar/ocultar el input de nombre
-    defaultSheetSelect.addEventListener('change', () => {
-        if (defaultSheetSelect.value === 'NEW_SHEET') {
-            defaultSheetNameInput.style.display = 'block';
-        } else {
-            defaultSheetNameInput.style.display = 'none';
-        }
-    });
-
     savePreferencesBtn.addEventListener('click', async () => {
-        const selectedId = defaultSheetSelect.value;
-        const saveObj = { defaultSheetId: selectedId };
+        const saveObj = { defaultSheetId: selectedSheetId, defaultSheetName: selectedSheetName };
 
         savePreferencesBtn.disabled = true;
         const origText = savePreferencesBtn.innerHTML;
         savePreferencesBtn.innerHTML = '<span class="ap-loader" style="display:inline-block; border-color:#ffffff transparent transparent transparent; width:14px; height:14px; margin-right: 6px;"></span> Guardando...';
 
         try {
-            if (selectedId === 'NEW_SHEET') {
+            if (selectedSheetId === 'NEW_SHEET') {
                 const customName = defaultSheetNameInput.value.trim() || 'Apollo Prospector Leads';
 
                 // Call API to actively create it right now
@@ -229,17 +296,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 saveObj.defaultSheetId = data.spreadsheetId;
                 saveObj.defaultSheetName = customName;
 
-                // Update dropdown visually
-                const newOpt = document.createElement('option');
-                newOpt.value = data.spreadsheetId;
-                newOpt.textContent = customName;
-                defaultSheetSelect.appendChild(newOpt);
-                defaultSheetSelect.value = data.spreadsheetId;
-                defaultSheetNameInput.style.display = 'none';
+                // Add to internal list and re-select
+                allSheets.unshift({ id: data.spreadsheetId, name: customName });
+                handleOptionSelect(data.spreadsheetId, customName);
 
-            } else if (selectedId) {
-                const selectedText = defaultSheetSelect.options[defaultSheetSelect.selectedIndex].text;
-                saveObj.defaultSheetName = selectedText;
             }
 
             chrome.storage.sync.set(saveObj, () => {
