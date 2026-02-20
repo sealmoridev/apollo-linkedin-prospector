@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 data.files.forEach(file => {
                     const opt = document.createElement('option');
                     opt.value = file.id;
-                    opt.textContent = `[#] ${file.name}`;
+                    opt.textContent = file.name;
                     defaultSheetSelect.appendChild(opt);
                 });
 
@@ -232,14 +232,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Update dropdown visually
                 const newOpt = document.createElement('option');
                 newOpt.value = data.spreadsheetId;
-                newOpt.textContent = `[#] ${customName}`;
+                newOpt.textContent = customName;
                 defaultSheetSelect.appendChild(newOpt);
                 defaultSheetSelect.value = data.spreadsheetId;
                 defaultSheetNameInput.style.display = 'none';
 
             } else if (selectedId) {
                 const selectedText = defaultSheetSelect.options[defaultSheetSelect.selectedIndex].text;
-                saveObj.defaultSheetName = selectedText.replace('[#] ', '');
+                saveObj.defaultSheetName = selectedText;
             }
 
             chrome.storage.sync.set(saveObj, () => {

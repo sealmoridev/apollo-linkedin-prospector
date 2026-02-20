@@ -239,7 +239,7 @@ const initializeWidgetLogic = async () => {
         if (emails && validateEmailBtn && emailBadge) {
             validateEmailBtn.style.display = 'flex';
             validateEmailBtn.disabled = false;
-            validateEmailBtn.innerHTML = 'Validar';
+            validateEmailBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
             emailBadge.style.display = 'none';
         } else if (validateEmailBtn && emailBadge) {
             validateEmailBtn.style.display = 'none';
@@ -506,16 +506,16 @@ const initializeWidgetLogic = async () => {
 
                 if (data.status === 'valid') {
                     emailBadge.className = 'ap-badge ap-badge-valid';
-                    emailBadge.innerHTML = '✅ Válido';
+                    emailBadge.innerHTML = '<svg style="width:12px; height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Válido';
                 } else if (data.status === 'invalid') {
                     emailBadge.className = 'ap-badge ap-badge-invalid';
-                    emailBadge.innerHTML = '❌ Inválido';
+                    emailBadge.innerHTML = '<svg style="width:12px; height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Inválido';
                 } else if (data.status === 'catch_all') {
                     emailBadge.className = 'ap-badge ap-badge-catchall';
-                    emailBadge.innerHTML = '⚠️ Catch-All';
+                    emailBadge.innerHTML = '<svg style="width:12px; height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg> Catch-All';
                 } else {
                     emailBadge.className = 'ap-badge ap-badge-unknown';
-                    emailBadge.innerHTML = '❔ Error/Desc';
+                    emailBadge.innerHTML = '<svg style="width:12px; height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg> Error/Desc';
                 }
 
                 // Attach to memory model for Google Sheets passing
