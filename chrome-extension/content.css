@@ -392,40 +392,41 @@ input:checked+.ap-slider:before {
   border: 1px solid rgba(226, 232, 240, 0.8);
   border-right: none;
   box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.08);
-  padding: 16px 12px;
-  border-radius: 10px 0 0 10px;
+  padding: 20px 8px;
+  border-radius: 12px 0 0 12px;
   cursor: pointer;
   z-index: 999998;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   font-weight: 600;
+  font-size: 14px;
   color: #0f172a;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   writing-mode: vertical-rl;
-  /* Texto en vertical */
   text-orientation: mixed;
-  width: 44px;
-  /* Ancho fijo */
+  white-space: nowrap;
+  /* Evita saltos de linea indeseados */
+  height: max-content;
+  width: 40px;
   box-sizing: border-box;
 }
 
 .ap-trigger svg {
   transform: rotate(90deg);
-  /* Mantener el icono horizontal */
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .ap-trigger:hover {
   background-color: white;
-  padding-left: 16px;
-  width: 48px;
+  padding-left: 14px;
+  width: 46px;
   box-shadow: -6px 6px 20px rgba(0, 0, 0, 0.12);
 }
 
 .ap-trigger.hidden {
   right: -60px;
-  /* Suficiente para ocultar sus 48px de ancho */
 }
 
 /* --- NEW FOR DATA PREVIEW --- */
