@@ -122,10 +122,10 @@ export class SheetsService {
             // 2. Darle formato a los Headers (fila 1)
             await sheets.spreadsheets.values.update({
                 spreadsheetId,
-                range: 'Leads Base!A1:I1',
+                range: 'Leads Base!A1:J1',
                 valueInputOption: 'USER_ENTERED',
                 requestBody: {
-                    values: [['Nombre', 'Emails', 'Título', 'Empresa', 'Locación', 'Teléfonos', 'URL LinkedIn', 'Fecha Captura', 'Estado del Email']]
+                    values: [['Nombre', 'Emails', 'Título', 'Empresa', 'Locación', 'Teléfonos', 'URL LinkedIn', 'Fecha Captura', 'Estado del Email', 'Notas / Observaciones']]
                 }
             });
 
@@ -141,7 +141,7 @@ export class SheetsService {
                                     startRowIndex: 0,
                                     endRowIndex: 1,
                                     startColumnIndex: 0,
-                                    endColumnIndex: 9
+                                    endColumnIndex: 10
                                 },
                                 cell: {
                                     userEnteredFormat: {
@@ -216,26 +216,39 @@ export class SheetsService {
 
             const sheets = this.getUserSheetsClient(userId);
 
-            const emails = [lead.email, lead.personalEmail].filter(Boolean).join(', ');
+            const primaryEmail = (lead as any).primaryEmail || [lead.email, lead.personalEmail].filter(Boolean)[0] || '';
+            const secondaryEmails = (lead as any).secondaryEmails || '';
             const phones = lead.phoneNumber || 'Pendiente Webhook';
+
+            let emailStatusVal = (lead as any).emailStatus || 'Sin verificar';
+            if (emailStatusVal !== 'Sin verificar' && primaryEmail) {
+                const statusMap: Record<string, string> = {
+                    'valid': 'Válido',
+                    'invalid': 'Inválido',
+                    'catch_all': 'Catch-All'
+                };
+                const translatedStatus = statusMap[emailStatusVal] || 'Error/Desc';
+                emailStatusVal = `${translatedStatus} (${primaryEmail})`;
+            }
 
             const values = [
                 [
                     lead.fullName || lead.firstName || 'Sin nombre',
-                    emails || 'Sin email',
+                    primaryEmail || 'Sin email',
                     lead.title || 'Sin título',
                     lead.company || 'Sin empresa',
                     lead.location || 'Sin locación',
                     phones,
                     lead.linkedinUrl || '',
                     new Date().toISOString(),
-                    (lead as any).emailStatus || 'Sin verificar'
+                    emailStatusVal,
+                    secondaryEmails
                 ]
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId: spreadsheetId,
-                range: 'Leads Base!A:I',
+                range: 'Leads Base!A:J',
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'OVERWRITE',
                 requestBody: {

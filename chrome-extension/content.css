@@ -412,9 +412,14 @@ input:checked+.ap-slider:before {
   box-sizing: border-box;
 }
 
-.ap-trigger svg {
+.ap-trigger img {
   transform: rotate(90deg);
-  margin-bottom: 12px;
+  /* Counter-acts the vertical writing mode to keep it readable, or aligns it depending on preference */
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  /* Space between the icon and the MR Prospect text */
   flex-shrink: 0;
 }
 
@@ -429,12 +434,110 @@ input:checked+.ap-slider:before {
   right: -60px;
 }
 
+/* --- EXTRACTION CARD DYNAMIC STATES --- */
+/* --- EXTRACTION CARD DYNAMIC STATES --- */
+.ap-card {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ap-card-value {
+  transition: color 0.3s ease;
+}
+
+.ap-state-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+/* State 1: Not on LinkedIn */
+.ap-state-warning {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%) !important;
+  border-color: rgba(253, 186, 116, 0.6) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 6px rgba(234, 88, 12, 0.06) !important;
+}
+
+.ap-state-warning .ap-card-value {
+  color: #c2410c !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-weight: 500 !important;
+}
+
+/* State 2: Ready to Extract */
+.ap-state-success {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+  border-color: rgba(134, 239, 172, 0.6) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 6px rgba(22, 163, 74, 0.06) !important;
+}
+
+.ap-state-success .ap-card-value {
+  color: #15803d !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-weight: 500 !important;
+}
+
+/* State 3: Already Extracted */
+.ap-state-info {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+  border-color: rgba(147, 197, 253, 0.6) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 6px rgba(37, 99, 235, 0.06) !important;
+}
+
+.ap-state-info .ap-card-value {
+  color: #1d4ed8 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-weight: 500 !important;
+}
+
 /* --- NEW FOR DATA PREVIEW --- */
 .ap-preview-section {
   display: none;
   /* Controlado via JS */
   flex-direction: column;
   gap: 16px;
+}
+
+.ap-email-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.ap-email-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.ap-email-radio-label:hover {
+  background: #f1f5f9;
+}
+
+.ap-email-radio-input {
+  accent-color: #9941c0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
 }
 
 .ap-data-row-modern {

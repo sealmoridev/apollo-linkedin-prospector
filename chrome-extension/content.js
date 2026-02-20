@@ -15,7 +15,7 @@ const logo48 = chrome.runtime.getURL('assets/icon48.png');
 // Interfaz HTML del Widget
 const widgetHTML = `
   <div id="apolloWidgetTrigger" class="ap-trigger">
-    <img src="${logo16}" style="width: 16px; height: 16px; border-radius: 4px;" alt="MR Prospect">
+    <img src="${logo48}" alt="MR Prospect">
     <span>MR Prospect</span>
   </div>
 
@@ -186,6 +186,7 @@ const initializeWidgetLogic = async () => {
     let apiUrl = 'http://localhost:3000';
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
+    let hasExtractedCurrentProfile = false; // Bandera para State 3
 
     // --- FUNCIONES UI GENERALES ---
 
@@ -218,6 +219,7 @@ const initializeWidgetLogic = async () => {
         }
         if (cancelBtn) cancelBtn.disabled = false;
 
+        updateUrlDisplay(); // Forzar actualización visual al volver al paso 1
         clearMessage();
     };
 
@@ -231,12 +233,59 @@ const initializeWidgetLogic = async () => {
         const titleStr = leadData.title || 'Sin título';
         const companyStr = leadData.company || 'Sin empresa';
         document.getElementById('apDataTitleCompany').textContent = `${titleStr} - ${companyStr}`;
-        const emails = [leadData.email, leadData.personalEmail].filter(Boolean).join(', ');
-        document.getElementById('apDataEmail').textContent = emails || 'Sin email';
+
+        const emailsRaw = [leadData.email, leadData.personalEmail].filter(Boolean).join(', ');
+        const emailsList = emailsRaw ? emailsRaw.split(',').map(e => e.trim()).filter(Boolean) : [];
+        const emailContainer = document.getElementById('apDataEmail');
+        emailContainer.innerHTML = ''; // Clear previous
+
+        if (emailsList.length === 0) {
+            emailContainer.textContent = 'Sin email';
+            extractedLeadData.primaryEmail = null;
+        } else if (emailsList.length === 1) {
+            emailContainer.textContent = emailsList[0];
+            extractedLeadData.primaryEmail = emailsList[0];
+        } else {
+            // Multiple emails - Create radio buttons
+            extractedLeadData.primaryEmail = emailsList[0]; // Default to first
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'ap-email-radio-group';
+
+            emailsList.forEach((email, index) => {
+                const label = document.createElement('label');
+                label.className = 'ap-email-radio-label';
+
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'apPrimaryEmail';
+                radio.className = 'ap-email-radio-input';
+                radio.value = email;
+                if (index === 0) radio.checked = true;
+
+                radio.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        extractedLeadData.primaryEmail = e.target.value;
+                        // Reset validation badge when changing primary email
+                        if (emailBadge) emailBadge.style.display = 'none';
+                        if (validateEmailBtn) {
+                            validateEmailBtn.style.display = 'flex';
+                            validateEmailBtn.disabled = false;
+                            validateEmailBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
+                        }
+                    }
+                });
+
+                label.appendChild(radio);
+                label.appendChild(document.createTextNode(email));
+                groupDiv.appendChild(label);
+            });
+            emailContainer.appendChild(groupDiv);
+        }
+
         document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
 
         // Reset and display validate button
-        if (emails && validateEmailBtn && emailBadge) {
+        if (emailsList.length > 0 && validateEmailBtn && emailBadge) {
             validateEmailBtn.style.display = 'flex';
             validateEmailBtn.disabled = false;
             validateEmailBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
@@ -273,16 +322,45 @@ const initializeWidgetLogic = async () => {
         }
     });
 
-    // --- DETECCIÓN DE URL SPAs ---
+    // --- DETECCIÓN DE URL Y ESTADOS ---
     const updateUrlDisplay = () => {
         currentLinkedinUrl = window.location.href;
-        if (currentLinkedinUrl.includes('linkedin.com/in/')) {
-            currentUrlEl.textContent = 'Perfil detectado automáticamente';
-            currentUrlEl.style.color = '#16a34a';
-        } else {
-            currentUrlEl.textContent = 'Navega a un perfil para extraer';
-            currentUrlEl.style.color = '#0f172a';
+        const cardParent = currentUrlEl.parentElement;
+
+        // Reset base class
+        cardParent.className = 'ap-card';
+
+        if (hasExtractedCurrentProfile) {
+            // State 3: Already Extracted
+            cardParent.classList.add('ap-state-info');
+            currentUrlEl.innerHTML = '<div class="ap-state-icon-box" style="color:#2563eb;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg></div> Perfil guardado. Navega a otro.';
             extractBtn.disabled = true;
+            extractBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Extraído</div>';
+        } else if (currentLinkedinUrl.includes('linkedin.com/in/')) {
+            // State 2: Ready
+            cardParent.classList.add('ap-state-success');
+
+            // Intentar buscar el nombre en el DOM de LinkedIn de forma ligera
+            let prospectName = 'Prospecto';
+            const nameEl = document.querySelector('h1.text-heading-xlarge');
+            if (nameEl && nameEl.innerText) {
+                // Remove pronouns if any (e.g. "Juan Perez (He/Him)" -> "Juan Perez")
+                prospectName = nameEl.innerText.split('(')[0].trim();
+            }
+
+            currentUrlEl.innerHTML = `<div class="ap-state-icon-box" style="color:#16a34a;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div> ¿Extraer a ${prospectName}?`;
+            extractBtn.disabled = !isAuthenticated;
+
+            // Restore default extract button text
+            extractBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg> Extraer Datos</div>';
+        } else {
+            // State 1: Warning (Not on LinkedIn Profile)
+            cardParent.classList.add('ap-state-warning');
+            currentUrlEl.innerHTML = '<div class="ap-state-icon-box" style="color:#ea580c;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></div> Abre un perfil de LinkedIn';
+            extractBtn.disabled = true;
+
+            // Restore default extract button text
+            extractBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg> Extraer Datos</div>';
         }
     };
 
@@ -290,11 +368,10 @@ const initializeWidgetLogic = async () => {
 
     setInterval(() => {
         if (currentLinkedinUrl !== window.location.href) {
+            currentLinkedinUrl = window.location.href;
+            hasExtractedCurrentProfile = false; // Reset lock when URL changes
             updateUrlDisplay();
             resetToExtractState(); // Al cambiar de página, volver al estado 1
-            if (isAuthenticated && window.location.href.includes('linkedin.com/in/')) {
-                extractBtn.disabled = false;
-            }
         }
     }, 1000);
 
@@ -465,10 +542,9 @@ const initializeWidgetLogic = async () => {
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
             if (!extractedLeadData) return;
-            const emails = [extractedLeadData.email, extractedLeadData.personalEmail].filter(Boolean).join(', ');
             const textToCopy = [
                 extractedLeadData.fullName || extractedLeadData.firstName || 'Sin nombre',
-                emails || 'Sin email',
+                extractedLeadData.primaryEmail || 'Sin email',
                 extractedLeadData.title || 'Sin título',
                 extractedLeadData.company || 'Sin empresa',
                 extractedLeadData.phoneNumber || 'Sin teléfono'
@@ -485,8 +561,8 @@ const initializeWidgetLogic = async () => {
     if (validateEmailBtn) {
         validateEmailBtn.addEventListener('click', async () => {
             if (!extractedLeadData) return;
-            // Get the first available email to validate
-            const emailToVerify = extractedLeadData.email || extractedLeadData.personalEmail;
+            // Get the explicitly selected primary email to validate
+            const emailToVerify = extractedLeadData.primaryEmail;
             if (!emailToVerify) return;
 
             validateEmailBtn.disabled = true;
@@ -546,6 +622,12 @@ const initializeWidgetLogic = async () => {
             customSheetName = storageConfig.defaultSheetName || 'Apollo Prospector Leads';
         }
 
+        // Calculate secondary emails to pass to backend securely
+        const emailsRaw = [extractedLeadData.email, extractedLeadData.personalEmail].filter(Boolean).join(', ');
+        const allEmails = emailsRaw ? emailsRaw.split(',').map(e => e.trim()).filter(Boolean) : [];
+        const secondaryEmails = allEmails.filter(e => e !== extractedLeadData.primaryEmail);
+        extractedLeadData.secondaryEmails = secondaryEmails.join(', ');
+
         saveBtn.disabled = true;
         saveBtnText.textContent = 'Guardando...';
         saveLoader.style.display = 'inline-block';
@@ -584,11 +666,14 @@ const initializeWidgetLogic = async () => {
                 saveLoader.style.display = 'none';
                 cancelBtn.disabled = false;
 
+                // Marcar que este perfil ya se extrajo para activar la UI Azul
+                hasExtractedCurrentProfile = true;
+
                 // Volver al paso 1 inmediatamente
                 resetToExtractState();
 
-                // Mostrar el texto solicitado para indicar que puede continuar
-                showMessage('Perfil extraído, continúa con otro.');
+                // Limpiamos el mensaje flotante porque la UI azul es auto-explicativa
+                clearMessage();
             } else {
                 throw new Error(data.error || 'Error desconocido');
             }
