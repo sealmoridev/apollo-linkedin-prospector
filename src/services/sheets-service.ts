@@ -236,7 +236,7 @@ export class SheetsService {
                 spreadsheetId: spreadsheetId,
                 range: 'Leads Base!A:H',
                 valueInputOption: 'USER_ENTERED',
-                insertDataOption: 'INSERT_ROWS',
+                insertDataOption: 'OVERWRITE',
                 requestBody: {
                     values: values
                 }
