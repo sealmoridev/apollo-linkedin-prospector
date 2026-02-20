@@ -217,7 +217,7 @@ app.get('/api/sheets/list', async (req: Request, res: Response) => {
 // Guardar datos en una hoja específica
 app.post('/api/sheets/save', async (req: Request, res: Response) => {
   try {
-    const { userId = 'default', spreadsheetId, lead } = req.body;
+    const { userId = 'default', spreadsheetId, lead, sheetName } = req.body;
 
     if (!spreadsheetId || !lead) {
       return res.status(400).json({
@@ -227,7 +227,7 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
 
     console.log(`[API] Saving lead to sheet ${spreadsheetId} for user ${userId}`);
 
-    const sheetSaved = await sheetsService.appendLead(userId, spreadsheetId, lead);
+    const sheetSaved = await sheetsService.appendLead(userId, spreadsheetId, lead, sheetName);
 
     if (sheetSaved) {
       res.json({ success: true, message: 'Lead saved successfully' });

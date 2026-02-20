@@ -79,6 +79,7 @@ const widgetHTML = `
           <select id="apSheetSelect" class="ap-select" disabled>
             <option value="">Cargando hojas...</option>
           </select>
+          <input type="text" id="apSheetNameInput" class="ap-input" placeholder="Nombre de la nueva Base de Datos..." style="display: none;" />
         </div>
 
         <button id="apSaveBtn" class="ap-btn-primary" style="background-color: #16a34a;">
@@ -138,6 +139,7 @@ const initializeWidgetLogic = async () => {
     const saveLoader = document.getElementById('apSaveLoader');
     const cancelBtn = document.getElementById('apCancelBtn');
     const sheetSelect = document.getElementById('apSheetSelect');
+    const sheetNameInput = document.getElementById('apSheetNameInput');
 
     const resultDiv = document.getElementById('apResultDiv');
     const optionsLink = document.getElementById('apOptionsLink');
@@ -166,6 +168,8 @@ const initializeWidgetLogic = async () => {
         extractSection.style.display = 'flex';
         previewSection.style.display = 'none';
         extractedLeadData = null;
+        sheetNameInput.style.display = 'none';
+        sheetNameInput.value = '';
         clearMessage();
     };
 
@@ -304,6 +308,10 @@ const initializeWidgetLogic = async () => {
             const data = await res.json();
 
             if (data.success && data.files) {
+                // Recuperar predeterminado de Storage
+                const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
+                const userDefaultSheetId = storageConfig.defaultSheetId;
+
                 sheetSelect.innerHTML = '<option value="NEW_SHEET">✨ Crear mi primer Prospector Sheet</option>';
                 data.files.forEach(file => {
                     const opt = document.createElement('option');
@@ -312,10 +320,21 @@ const initializeWidgetLogic = async () => {
                     sheetSelect.appendChild(opt);
                 });
 
-                // Si el usuario ya tiene hojas, intentar pre-seleccionar "Apollo Prospector Leads"
-                const defaultSheet = data.files.find(f => f.name.includes('Apollo Prospector Leads') || f.name.toLowerCase().includes('prospector'));
-                if (defaultSheet) {
-                    sheetSelect.value = defaultSheet.id;
+                // Lógica de pre-selección
+                if (userDefaultSheetId && data.files.find(f => f.id === userDefaultSheetId)) {
+                    sheetSelect.value = userDefaultSheetId;
+                } else {
+                    const defaultSheet = data.files.find(f => f.name.includes('Apollo Prospector Leads') || f.name.toLowerCase().includes('prospector'));
+                    if (defaultSheet) {
+                        sheetSelect.value = defaultSheet.id;
+                    }
+                }
+
+                // Mostrar input si NEW_SHEET quedó seleccionado (por defecto cuando no hay hojas)
+                if (sheetSelect.value === 'NEW_SHEET') {
+                    sheetNameInput.style.display = 'block';
+                } else {
+                    sheetNameInput.style.display = 'none';
                 }
 
                 sheetSelect.disabled = false;
@@ -329,6 +348,15 @@ const initializeWidgetLogic = async () => {
             showMessage('Error al cargar tus archivos de Google Drive.', true);
         }
     };
+
+    // --- ACCIÓN: CAMBIAR SELECCIÓN DE SHEET ---
+    sheetSelect.addEventListener('change', () => {
+        if (sheetSelect.value === 'NEW_SHEET') {
+            sheetNameInput.style.display = 'block';
+        } else {
+            sheetNameInput.style.display = 'none';
+        }
+    });
 
     // --- ACCIÓN: EXTRAER DATOS (PASO 1) ---
 
@@ -383,6 +411,11 @@ const initializeWidgetLogic = async () => {
             return;
         }
 
+        let customSheetName = undefined;
+        if (selectedSheetId === 'NEW_SHEET') {
+            customSheetName = sheetNameInput.value.trim() || 'Apollo Prospector Leads';
+        }
+
         saveBtn.disabled = true;
         saveBtnText.textContent = 'Guardando...';
         saveLoader.style.display = 'inline-block';
@@ -396,7 +429,8 @@ const initializeWidgetLogic = async () => {
                 body: JSON.stringify({
                     userId: userId,
                     spreadsheetId: selectedSheetId,
-                    lead: extractedLeadData
+                    lead: extractedLeadData,
+                    sheetName: customSheetName
                 })
             });
 

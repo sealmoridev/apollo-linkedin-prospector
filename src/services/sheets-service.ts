@@ -89,7 +89,7 @@ export class SheetsService {
     /**
      * Crea un nuevo Spreadsheet para el usuario si no tiene uno
      */
-    async getOrCreateSpreadsheet(userId: string): Promise<string> {
+    async getOrCreateSpreadsheet(userId: string, sheetName: string = 'Apollo Prospector Leads'): Promise<string> {
         const userTokens = tokenStorage.getToken(userId);
         if (!userTokens) throw new Error('User not authenticated with Google');
 
@@ -105,7 +105,7 @@ export class SheetsService {
             const response = await sheets.spreadsheets.create({
                 requestBody: {
                     properties: {
-                        title: 'Apollo Prospector Leads'
+                        title: sheetName
                     },
                     sheets: [
                         {
@@ -208,11 +208,11 @@ export class SheetsService {
     /**
      * Guarda un perfil en el Google Sheet específico
      */
-    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead): Promise<boolean> {
+    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string): Promise<boolean> {
         try {
             // Verificar si se solicitó crear una nueva hoja
             if (spreadsheetId === 'NEW_SHEET') {
-                spreadsheetId = await this.getOrCreateSpreadsheet(userId);
+                spreadsheetId = await this.getOrCreateSpreadsheet(userId, sheetName);
             }
 
             const sheets = this.getUserSheetsClient(userId);
