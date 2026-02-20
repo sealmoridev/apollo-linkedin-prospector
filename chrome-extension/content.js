@@ -246,8 +246,8 @@ const initializeWidgetLogic = async () => {
             emailContainer.textContent = emailsList[0];
             extractedLeadData.primaryEmail = emailsList[0];
         } else {
-            // Multiple emails - Create radio buttons
-            extractedLeadData.primaryEmail = emailsList[0]; // Default to first
+            // Multiple emails - Create radio buttons (force selection)
+            extractedLeadData.primaryEmail = null;
             const groupDiv = document.createElement('div');
             groupDiv.className = 'ap-email-radio-group';
 
@@ -260,17 +260,25 @@ const initializeWidgetLogic = async () => {
                 radio.name = 'apPrimaryEmail';
                 radio.className = 'ap-email-radio-input';
                 radio.value = email;
-                if (index === 0) radio.checked = true;
+                // Ninguno pre-seleccionado
 
                 radio.addEventListener('change', (e) => {
                     if (e.target.checked) {
                         extractedLeadData.primaryEmail = e.target.value;
-                        // Reset validation badge when changing primary email
+                        extractedLeadData.emailStatus = 'Sin verificar'; // Reset validation status for new selection
+
+                        // Habilitar Validar
                         if (emailBadge) emailBadge.style.display = 'none';
                         if (validateEmailBtn) {
                             validateEmailBtn.style.display = 'flex';
                             validateEmailBtn.disabled = false;
                             validateEmailBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
+                        }
+
+                        // Habilitar Guardar
+                        if (saveBtn) {
+                            saveBtn.disabled = false;
+                            if (saveBtnText) saveBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</div>';
                         }
                     }
                 });
@@ -284,15 +292,21 @@ const initializeWidgetLogic = async () => {
 
         document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
 
-        // Reset and display validate button
-        if (emailsList.length > 0 && validateEmailBtn && emailBadge) {
+        // Initial setup for Validate and Save buttons based on if there is a primary email
+        if (extractedLeadData.primaryEmail && validateEmailBtn && emailBadge) {
             validateEmailBtn.style.display = 'flex';
             validateEmailBtn.disabled = false;
             validateEmailBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
             emailBadge.style.display = 'none';
         } else if (validateEmailBtn && emailBadge) {
+            // Either no emails at all, or multiple awaiting selection
             validateEmailBtn.style.display = 'none';
             emailBadge.style.display = 'none';
+        }
+
+        if (!extractedLeadData.primaryEmail && emailsList.length > 1 && saveBtn) {
+            saveBtn.disabled = true;
+            if (saveBtnText) saveBtnText.innerHTML = 'Selecciona Email Primario';
         }
     };
 

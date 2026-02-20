@@ -221,14 +221,13 @@ export class SheetsService {
             const phones = lead.phoneNumber || 'Pendiente Webhook';
 
             let emailStatusVal = (lead as any).emailStatus || 'Sin verificar';
-            if (emailStatusVal !== 'Sin verificar' && primaryEmail) {
+            if (emailStatusVal !== 'Sin verificar') {
                 const statusMap: Record<string, string> = {
                     'valid': 'Válido',
                     'invalid': 'Inválido',
                     'catch_all': 'Catch-All'
                 };
-                const translatedStatus = statusMap[emailStatusVal] || 'Error/Desc';
-                emailStatusVal = `${translatedStatus} (${primaryEmail})`;
+                emailStatusVal = statusMap[emailStatusVal] || 'Error/Desc';
             }
 
             const values = [
