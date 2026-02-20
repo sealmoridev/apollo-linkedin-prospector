@@ -200,21 +200,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    savePreferencesBtn.addEventListener('click', () => {
+    savePreferencesBtn.addEventListener('click', async () => {
         const selectedId = defaultSheetSelect.value;
         const saveObj = { defaultSheetId: selectedId };
 
-        if (selectedId === 'NEW_SHEET') {
-            // Si eligieron crear nueva, guardamos el nombre customizado o un default
-            saveObj.defaultSheetName = defaultSheetNameInput.value.trim() || 'Apollo Prospector Leads';
-        } else if (selectedId) {
-            const selectedText = defaultSheetSelect.options[defaultSheetSelect.selectedIndex].text;
-            saveObj.defaultSheetName = selectedText.replace('📄 ', '');
-        }
+        savePreferencesBtn.disabled = true;
+        const origText = savePreferencesBtn.innerHTML;
+        savePreferencesBtn.innerHTML = '<span class="ap-loader" style="display:inline-block; border-color:#ffffff transparent transparent transparent; width:14px; height:14px; margin-right: 6px;"></span> Guardando...';
 
-        chrome.storage.sync.set(saveObj, () => {
-            showMessage(prefsMessage, '✅ Hoja Predeterminada guardada con éxito.');
-        });
+        try {
+            if (selectedId === 'NEW_SHEET') {
+                const customName = defaultSheetNameInput.value.trim() || 'Apollo Prospector Leads';
+
+                // Call API to actively create it right now
+                const response = await fetch(`${currentApiUrl}/api/sheets/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, sheetName: customName })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Server error creating sheet');
+                }
+
+                // Override the target ID with the real created ID
+                saveObj.defaultSheetId = data.spreadsheetId;
+                saveObj.defaultSheetName = customName;
+
+                // Update dropdown visually
+                const newOpt = document.createElement('option');
+                newOpt.value = data.spreadsheetId;
+                newOpt.textContent = `📄 ${customName}`;
+                defaultSheetSelect.appendChild(newOpt);
+                defaultSheetSelect.value = data.spreadsheetId;
+                defaultSheetNameInput.style.display = 'none';
+
+            } else if (selectedId) {
+                const selectedText = defaultSheetSelect.options[defaultSheetSelect.selectedIndex].text;
+                saveObj.defaultSheetName = selectedText.replace('📄 ', '');
+            }
+
+            chrome.storage.sync.set(saveObj, () => {
+                showMessage(prefsMessage, '✅ Hoja Predeterminada configurada con éxito.');
+                savePreferencesBtn.disabled = false;
+                savePreferencesBtn.innerHTML = origText;
+            });
+        } catch (err) {
+            console.error(err);
+            showMessage(prefsMessage, '❌ Error al crear la hoja en Google Drive.', true);
+            savePreferencesBtn.disabled = false;
+            savePreferencesBtn.innerHTML = origText;
+        }
     });
 
     // Iniciar

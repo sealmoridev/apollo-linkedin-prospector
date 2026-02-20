@@ -214,6 +214,28 @@ app.get('/api/sheets/list', async (req: Request, res: Response) => {
   }
 });
 
+// Crear una nueva hoja de cálculo explícitamente
+app.post('/api/sheets/create', async (req: Request, res: Response) => {
+  try {
+    const { userId = 'default', sheetName } = req.body;
+    console.log(`[API] Creating new spreadsheet expressly for user ${userId} with name: ${sheetName}`);
+
+    const spreadsheetId = await sheetsService.createSpreadsheet(userId, sheetName);
+
+    res.json({
+      success: true,
+      spreadsheetId: spreadsheetId,
+      message: 'Spreadsheet created successfully'
+    });
+  } catch (error) {
+    console.error('[API] Error creating sheet explicitly:', error);
+    res.status(500).json({
+      error: 'Failed to create spreadsheet',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Guardar datos en una hoja específica
 app.post('/api/sheets/save', async (req: Request, res: Response) => {
   try {
