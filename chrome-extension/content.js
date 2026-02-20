@@ -253,39 +253,69 @@ const initializeWidgetLogic = async () => {
             isAuthenticated = data.authenticated;
             authSection.style.display = 'block';
 
+            // Remover listeners previos de loginBtn clonando el nodo para evitar ejecuciones dobles
+            const oldLoginBtn = loginBtn;
+            const newLoginBtn = oldLoginBtn.cloneNode(true);
+            oldLoginBtn.parentNode.replaceChild(newLoginBtn, oldLoginBtn);
+
             if (isAuthenticated) {
-                authStatusText.textContent = '✅ Conectado a Sheets';
-                authStatusText.className = 'ap-auth-status connected';
-                loginBtn.style.display = 'none';
-                if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
+                const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
+
+                if (!storageConfig.defaultSheetId) {
+                    // Autenticado pero SIN hoja configurada
+                    authStatusText.innerHTML = '<span class="indicator">⚠️</span> Falta Configurar Hoja';
+                    authStatusText.className = 'ap-auth-status disconnected'; // rojo/naranja
+                    newLoginBtn.innerHTML = '⚙️ Configurar Hoja de Google';
+                    newLoginBtn.style.display = 'flex';
+                    newLoginBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: "openOptionsPage" }));
+                    extractBtn.disabled = true;
+                } else {
+                    // Autenticado y CON hoja
+                    authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets';
+                    authStatusText.className = 'ap-auth-status connected';
+                    newLoginBtn.style.display = 'none';
+                    if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
+                }
             } else {
-                authStatusText.textContent = 'Desconectado';
+                // NO autenticado
+                authStatusText.innerHTML = '<span class="indicator">🔴</span> Desconectado';
                 authStatusText.className = 'ap-auth-status disconnected';
-                loginBtn.style.display = 'flex';
+                newLoginBtn.innerHTML = `
+                  <svg width="18" height="18" viewBox="0 0 48 48" style="margin-right: 5px;">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.7 17.74 9.5 24 9.5z"></path>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                    <path fill="none" d="M0 0h48v48H0z"></path>
+                  </svg>
+                  Conectar con Google`;
+                newLoginBtn.style.display = 'flex';
                 extractBtn.disabled = true;
+
+                newLoginBtn.addEventListener('click', async () => {
+                    try {
+                        const res = await fetch(`${apiUrl}/api/auth/google?userId=${userId}`);
+                        const d = await res.json();
+                        if (d.url) window.open(d.url, '_blank');
+                    } catch (err) {
+                        showMessage('Error de conexión con el Servidor.', true);
+                    }
+                });
             }
+
+            // Re-asignar referencia global a newLoginBtn
+            // (El closure lo capturará bien, pero para re-renders)
         } catch (err) {
             console.error('Auth error', err);
             authSection.style.display = 'block';
-            authStatusText.textContent = 'Servidor inalcanzable';
+            authStatusText.innerHTML = '<span class="indicator">🟠</span> Servidor inalcanzable';
             authStatusText.className = 'ap-auth-status disconnected';
+            // Dejar el botón viejo pero escondido
             loginBtn.style.display = 'none';
         }
     };
 
     await checkAuthStatus();
-
-    loginBtn.addEventListener('click', async () => {
-        try {
-            const response = await fetch(`${apiUrl}/api/auth/google?userId=${userId}`);
-            const data = await response.json();
-            if (data.url) {
-                window.open(data.url, '_blank');
-            }
-        } catch (err) {
-            showMessage('Error de conexión con el Servidor.', true);
-        }
-    });
 
     // Detectar cuando el usuario vuelve a la pestaña de LinkedIn (probablemente después de loguearse en Google)
     document.addEventListener('visibilitychange', () => {
@@ -387,6 +417,15 @@ const initializeWidgetLogic = async () => {
 
             if (data.success && data.data) {
                 showPreviewState(data.data);
+
+                // --- AUTO SAVE ---
+                const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
+                if (storageConfig.defaultSheetId) {
+                    // Forzar selección del sheet default por si la red tardó
+                    sheetSelect.value = storageConfig.defaultSheetId;
+                    // Auto click al botón de guardar
+                    saveBtn.click();
+                }
             }
         } catch (error) {
             console.error('Extraction error:', error);

@@ -87,16 +87,11 @@ export class SheetsService {
     }
 
     /**
-     * Crea un nuevo Spreadsheet para el usuario si no tiene uno
+     * Crea un nuevo Spreadsheet para el usuario
      */
-    async getOrCreateSpreadsheet(userId: string, sheetName: string = 'Apollo Prospector Leads'): Promise<string> {
+    async createSpreadsheet(userId: string, sheetName: string = 'Apollo Prospector Leads'): Promise<string> {
         const userTokens = tokenStorage.getToken(userId);
         if (!userTokens) throw new Error('User not authenticated with Google');
-
-        // Si ya lo tiene cacheado, lo retornamos (asumiendo que no lo borró de drive)
-        if (userTokens.spreadsheetId) {
-            return userTokens.spreadsheetId;
-        }
 
         const sheets = this.getUserSheetsClient(userId);
 
@@ -212,7 +207,11 @@ export class SheetsService {
         try {
             // Verificar si se solicitó crear una nueva hoja
             if (spreadsheetId === 'NEW_SHEET') {
-                spreadsheetId = await this.getOrCreateSpreadsheet(userId, sheetName);
+                spreadsheetId = await this.createSpreadsheet(userId, sheetName);
+            } else {
+                // Si eligen una hoja existente, la guardamos temporalmente en el token 
+                // para que el webhook de teléfonos sepa dónde buscar luego.
+                tokenStorage.setSpreadsheetId(userId, spreadsheetId);
             }
 
             const sheets = this.getUserSheetsClient(userId);
@@ -258,8 +257,15 @@ export class SheetsService {
     async updatePhone(userId: string, linkedinUrl: string, phones: string[]): Promise<boolean> {
         if (!phones || phones.length === 0) return false;
 
+        const userTokens = tokenStorage.getToken(userId);
+        if (!userTokens || !userTokens.spreadsheetId) {
+            console.error('❌ Error actualizando teléfono: No hay spreadsheet activo cacheado para este usuario.');
+            return false;
+        }
+
+        const spreadsheetId = userTokens.spreadsheetId;
+
         try {
-            const spreadsheetId = await this.getOrCreateSpreadsheet(userId);
             const sheets = this.getUserSheetsClient(userId);
 
             const response = await sheets.spreadsheets.values.get({

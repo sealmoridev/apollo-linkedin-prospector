@@ -278,12 +278,7 @@ app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
 
     console.log(`✅ [OAuth] Tokens guardados para el usuario: ${userId}`);
 
-    // Opcional: Crear el spreadsheet automáticamente en el momento del login
-    try {
-      await sheetsService.getOrCreateSpreadsheet(userId);
-    } catch (e) {
-      console.warn('No se pudo crear el spreadsheet durante el login inicial, se intentará luego.', e);
-    }
+    // Ya no creamos el spreadsheet automáticamente. El usuario lo elegirá en la UI.
 
     // Devolver un HTML que cierre la ventana emergente de Chrome
     res.send(`
