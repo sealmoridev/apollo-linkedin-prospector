@@ -145,8 +145,8 @@ export class SheetsService {
                                 },
                                 cell: {
                                     userEnteredFormat: {
-                                        textFormat: { bold: true },
-                                        backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 }
+                                        textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                                        backgroundColor: { red: 0.6, green: 0.25, blue: 0.75 }
                                     }
                                 },
                                 fields: 'userEnteredFormat(textFormat,backgroundColor)'

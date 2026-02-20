@@ -74,7 +74,10 @@ const widgetHTML = `
         
         <div class="ap-card" style="background-color: #ffffff; padding: 0; overflow: hidden; border-color: #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
           <div style="background-color: #f8fafc; padding: 12px 16px; border-bottom: 1px solid rgba(226, 232, 240, 0.8); display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 12px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Prospecto Extraído</div>
+            <div style="font-size: 12px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+              <svg style="width:14px; height:14px; stroke-width:2.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              Prospecto Extraído
+            </div>
             <button id="apCopyDataBtn" class="ap-icon-btn" title="Copiar Datos" style="background: none; border: none; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; transition: all 0.2s;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             </button>
@@ -195,6 +198,15 @@ const initializeWidgetLogic = async () => {
         extractSection.style.display = 'flex';
         previewSection.style.display = 'none';
         extractedLeadData = null;
+
+        // Resetear botones en caso de estar pegados
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtnText.textContent = 'Confirmar y Guardar';
+            saveLoader.style.display = 'none';
+        }
+        if (cancelBtn) cancelBtn.disabled = false;
+
         clearMessage();
     };
 
@@ -495,6 +507,12 @@ const initializeWidgetLogic = async () => {
                     // Hacemos que aparezca el link en vivo
                     checkAuthStatus();
                 }
+
+                // Restaurar estado del botón antes de ocultar
+                saveBtn.disabled = false;
+                saveBtnText.textContent = 'Confirmar y Guardar';
+                saveLoader.style.display = 'none';
+                cancelBtn.disabled = false;
 
                 // Volver al paso 1 inmediatamente
                 resetToExtractState();
