@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import axios from 'axios';
 
 export interface VerificationResult {
     email: string;
@@ -8,17 +8,13 @@ export interface VerificationResult {
 }
 
 export class MillionVerifyService {
-    private apiKey: string;
-
-    constructor() {
-        this.apiKey = process.env.MILLION_VERIFY_API_KEY || '';
-    }
-
     /**
      * Valida un correo usando la API de MillionVerify
      */
     async verifyEmail(email: string): Promise<VerificationResult> {
-        if (!this.apiKey || this.apiKey === 'tu_api_key_aqui') {
+        const apiKey = process.env.MILLION_VERIFY_API_KEY || '';
+
+        if (!apiKey || apiKey === 'tu_api_key_aqui') {
             console.warn('⚠️ [MillionVerify] API Key no configurada. Agrega MILLION_VERIFY_API_KEY a tu .env');
             return { email, status: 'error', rawCode: 0, message: 'API Key de validación faltante en el servidor.' };
         }
@@ -29,15 +25,15 @@ export class MillionVerifyService {
 
         try {
             console.log(`[MillionVerify] Verificando correo: ${email}...`);
-            const url = `https://api.millionverify.com/api/v3/?api=${this.apiKey}&email=${encodeURIComponent(email)}&timeout=20`;
+            const url = `https://api.millionverifier.com/api/v3/?api=${apiKey}&email=${encodeURIComponent(email)}&timeout=20`;
 
-            const response = await fetch(url);
+            const response = await axios.get(url, { validateStatus: () => true });
 
-            if (!response.ok) {
+            if (response.status !== 200) {
                 return { email, status: 'error', rawCode: response.status, message: 'Error en la respuesta de la API v3' };
             }
 
-            const data = await response.json() as any;
+            const data = response.data;
 
             // Handle API level errors (e.g. invalid key)
             if (data.error) {
