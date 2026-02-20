@@ -69,21 +69,13 @@ const widgetHTML = `
       <!-- PASO 2: Pre-visualización y Guardado -->
       <div id="apPreviewSection" class="ap-preview-section">
         
-        <div class="ap-card" style="background-color: #f8fafc; border-color: #cbd5e1;">
+        <div class="ap-card" style="background-color: #f8fafc; border-color: #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #0f172a; text-align: center;">Datos Encontrados</div>
           <div class="ap-data-row"><span class="ap-data-label">Nombre:</span><span class="ap-data-value" id="apDataName"></span></div>
           <div class="ap-data-row"><span class="ap-data-label">Título:</span><span class="ap-data-value" id="apDataTitle"></span></div>
           <div class="ap-data-row"><span class="ap-data-label">Empresa:</span><span class="ap-data-value" id="apDataCompany"></span></div>
           <div class="ap-data-row"><span class="ap-data-label">Email:</span><span class="ap-data-value" id="apDataEmail"></span></div>
           <div class="ap-data-row"><span class="ap-data-label">Teléfono:</span><span class="ap-data-value" id="apDataPhone"></span></div>
-        </div>
-
-        <div class="ap-select-group">
-          <label class="ap-card-label" style="font-weight: 500; font-size: 13px; color: #1e293b;">Hoja Destino</label>
-          <select id="apSheetSelect" class="ap-select" disabled>
-            <option value="">Cargando hojas...</option>
-          </select>
-          <input type="text" id="apSheetNameInput" class="ap-input" placeholder="Nombre de la nueva Base de Datos..." style="display: none;" />
         </div>
 
         <button id="apSaveBtn" class="ap-btn-primary" style="background-color: #16a34a;">
@@ -142,8 +134,6 @@ const initializeWidgetLogic = async () => {
     const saveBtnText = saveBtn.querySelector('.ap-save-btn-text');
     const saveLoader = document.getElementById('apSaveLoader');
     const cancelBtn = document.getElementById('apCancelBtn');
-    const sheetSelect = document.getElementById('apSheetSelect');
-    const sheetNameInput = document.getElementById('apSheetNameInput');
 
     const resultDiv = document.getElementById('apResultDiv');
     const optionsLink = document.getElementById('apOptionsLink');
@@ -172,8 +162,6 @@ const initializeWidgetLogic = async () => {
         extractSection.style.display = 'flex';
         previewSection.style.display = 'none';
         extractedLeadData = null;
-        sheetNameInput.style.display = 'none';
-        sheetNameInput.value = '';
         clearMessage();
     };
 
@@ -188,9 +176,6 @@ const initializeWidgetLogic = async () => {
         document.getElementById('apDataCompany').textContent = leadData.company || 'Sin empresa';
         document.getElementById('apDataEmail').textContent = leadData.email || leadData.personalEmail || 'Sin email';
         document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
-
-        // Cargar hojas del usuario
-        fetchUserSheets();
     };
 
     // --- LÓGICA DE ABRIR/CERRAR ---
@@ -271,7 +256,7 @@ const initializeWidgetLogic = async () => {
             loginBtn.onclick = null;
 
             if (isAuthenticated) {
-                const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
+                const storageConfig = await chrome.storage.sync.get(['defaultSheetId', 'defaultSheetName']);
                 const hasDefaultSheet = storageConfig && storageConfig.defaultSheetId;
 
                 if (!hasDefaultSheet) {
@@ -290,7 +275,13 @@ const initializeWidgetLogic = async () => {
                     }
                 } else {
                     // Autenticado y CON hoja
-                    authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets (Auto-Sync)';
+                    let sheetNameHtml = storageConfig.defaultSheetName || 'Tu Base de Datos';
+                    if (storageConfig.defaultSheetId !== 'NEW_SHEET') {
+                        sheetNameHtml = `<a href="https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit" target="_blank" title="Abrir Base de Datos" style="color: #2563eb; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; padding-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">📄 ${sheetNameHtml} <svg style="width:12px; height:12px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>`;
+                    } else {
+                        sheetNameHtml = `<div style="padding-top: 4px; font-weight: 600; color: #0f172a;">✨ ${sheetNameHtml} (Pendiente de Creación)</div>`;
+                    }
+                    authStatusText.innerHTML = `<span class="indicator">🟢</span> Enlazado a:<br>${sheetNameHtml}`;
                     authStatusText.className = 'ap-auth-status connected';
                     loginBtn.style.display = 'none';
                     if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
@@ -349,65 +340,7 @@ const initializeWidgetLogic = async () => {
         chrome.runtime.sendMessage({ action: "openOptionsPage" });
     });
 
-    const fetchUserSheets = async () => {
-        sheetSelect.disabled = true;
-        sheetSelect.innerHTML = '<option value="">Cargando hojas...</option>';
-        saveBtn.disabled = true;
 
-        try {
-            const res = await fetch(`${apiUrl}/api/sheets/list?userId=${userId}`);
-            const data = await res.json();
-
-            if (data.success && data.files) {
-                // Recuperar predeterminado de Storage
-                const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
-                const userDefaultSheetId = storageConfig.defaultSheetId;
-
-                sheetSelect.innerHTML = '<option value="NEW_SHEET">✨ Crear mi primer Prospector Sheet</option>';
-                data.files.forEach(file => {
-                    const opt = document.createElement('option');
-                    opt.value = file.id;
-                    opt.textContent = `📄 ${file.name}`;
-                    sheetSelect.appendChild(opt);
-                });
-
-                // Lógica de pre-selección
-                if (userDefaultSheetId && data.files.find(f => f.id === userDefaultSheetId)) {
-                    sheetSelect.value = userDefaultSheetId;
-                } else {
-                    const defaultSheet = data.files.find(f => f.name.includes('Apollo Prospector Leads') || f.name.toLowerCase().includes('prospector'));
-                    if (defaultSheet) {
-                        sheetSelect.value = defaultSheet.id;
-                    }
-                }
-
-                // Mostrar input si NEW_SHEET quedó seleccionado (por defecto cuando no hay hojas)
-                if (sheetSelect.value === 'NEW_SHEET') {
-                    sheetNameInput.style.display = 'block';
-                } else {
-                    sheetNameInput.style.display = 'none';
-                }
-
-                sheetSelect.disabled = false;
-                saveBtn.disabled = false;
-            } else {
-                throw new Error("No se pudo cargar la lista");
-            }
-        } catch (err) {
-            console.error('Error fetching sheets', err);
-            sheetSelect.innerHTML = '<option value="">Error al cargar hojas</option>';
-            showMessage('Error al cargar tus archivos de Google Drive.', true);
-        }
-    };
-
-    // --- ACCIÓN: CAMBIAR SELECCIÓN DE SHEET ---
-    sheetSelect.addEventListener('change', () => {
-        if (sheetSelect.value === 'NEW_SHEET') {
-            sheetNameInput.style.display = 'block';
-        } else {
-            sheetNameInput.style.display = 'none';
-        }
-    });
 
     // --- ACCIÓN: EXTRAER DATOS (PASO 1) ---
 
@@ -442,9 +375,6 @@ const initializeWidgetLogic = async () => {
                 // --- AUTO SAVE ---
                 const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
                 if (storageConfig.defaultSheetId) {
-                    // Forzar selección del sheet default por si la red tardó
-                    sheetSelect.value = storageConfig.defaultSheetId;
-                    // Auto click al botón de guardar
                     saveBtn.click();
                 }
             }
@@ -465,17 +395,17 @@ const initializeWidgetLogic = async () => {
     saveBtn.addEventListener('click', async () => {
         if (!extractedLeadData) return;
 
-        const selectedSheetId = sheetSelect.value;
+        const storageConfig = await chrome.storage.sync.get(['defaultSheetId', 'defaultSheetName']);
+        const selectedSheetId = storageConfig.defaultSheetId;
+
         if (!selectedSheetId) {
-            showMessage('Por favor selecciona una hoja destino.', true);
+            showMessage('Por favor configura una hoja destino en Opciones primero.', true);
             return;
         }
 
         let customSheetName = undefined;
         if (selectedSheetId === 'NEW_SHEET') {
-            const storageConfig = await chrome.storage.sync.get(['defaultSheetName']);
-            // Prioriza el input visible, luego el de Opciones, luego el fallback default
-            customSheetName = sheetNameInput.value.trim() || storageConfig.defaultSheetName || 'Apollo Prospector Leads';
+            customSheetName = storageConfig.defaultSheetName || 'Apollo Prospector Leads';
         }
 
         saveBtn.disabled = true;
@@ -504,6 +434,14 @@ const initializeWidgetLogic = async () => {
 
             if (data.success) {
                 showMessage('✅ ¡Lead guardado exitosamente en Google Sheets!');
+
+                // Si acabamos de crear una hoja nueva, obtener y guardar el id persistente
+                if (data.spreadsheetId && selectedSheetId === 'NEW_SHEET') {
+                    await chrome.storage.sync.set({ defaultSheetId: data.spreadsheetId });
+                    // Hacemos que aparezca el link en vivo
+                    checkAuthStatus();
+                }
+
                 // Auto-cerrar o resetear después de 3 segundos
                 setTimeout(resetToExtractState, 3000);
             } else {

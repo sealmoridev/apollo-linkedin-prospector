@@ -227,10 +227,10 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
 
     console.log(`[API] Saving lead to sheet ${spreadsheetId} for user ${userId}`);
 
-    const sheetSaved = await sheetsService.appendLead(userId, spreadsheetId, lead, sheetName);
+    const sheetResult = await sheetsService.appendLead(userId, spreadsheetId, lead, sheetName);
 
-    if (sheetSaved) {
-      res.json({ success: true, message: 'Lead saved successfully' });
+    if (sheetResult.success) {
+      res.json({ success: true, message: 'Lead saved successfully', spreadsheetId: sheetResult.spreadsheetId });
     } else {
       res.status(500).json({ success: false, error: 'Failed to save logic in Sheets' });
     }

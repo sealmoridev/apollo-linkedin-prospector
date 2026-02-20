@@ -207,6 +207,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (selectedId === 'NEW_SHEET') {
             // Si eligieron crear nueva, guardamos el nombre customizado o un default
             saveObj.defaultSheetName = defaultSheetNameInput.value.trim() || 'Apollo Prospector Leads';
+        } else if (selectedId) {
+            const selectedText = defaultSheetSelect.options[defaultSheetSelect.selectedIndex].text;
+            saveObj.defaultSheetName = selectedText.replace('📄 ', '');
         }
 
         chrome.storage.sync.set(saveObj, () => {

@@ -203,7 +203,7 @@ export class SheetsService {
     /**
      * Guarda un perfil en el Google Sheet específico
      */
-    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string): Promise<boolean> {
+    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string): Promise<{ success: boolean; spreadsheetId?: string }> {
         try {
             // Verificar si se solicitó crear una nueva hoja
             if (spreadsheetId === 'NEW_SHEET') {
@@ -243,11 +243,11 @@ export class SheetsService {
             });
 
             console.log(`✅ Lead "${lead.fullName}" insertado para usuario ${userId}.`);
-            return true;
+            return { success: true, spreadsheetId };
 
         } catch (error) {
             console.error(`❌ Error insertando Lead en Sheets para usuario ${userId}:`, error);
-            return false;
+            return { success: false };
         }
     }
 
