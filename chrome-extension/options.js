@@ -183,17 +183,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         customSheetOptionsList.innerHTML = ''; // Clear
 
         if (sheets.length === 0) {
-            customSheetOptionsList.innerHTML = '<div class="no-results">No se encontraron bases de datos</div>';
+            customSheetOptionsList.innerHTML = '<div class="no-results" style="padding-bottom: 0px;">No se encontraron bases de datos similares</div>';
         }
 
-        // 1. (Opcional) Opción para no usar predeterminado
+        // 1. Opción de Crear Nuevo (Fija y prominente al inicio)
+        const newOpt = document.createElement('div');
+        newOpt.className = 'custom-option action-option';
+        newOpt.innerHTML = '<svg style="width:15px; height:15px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg> Crear nueva Base de Datos';
+        newOpt.addEventListener('click', () => handleOptionSelect('NEW_SHEET', 'Crear Base de Datos Nueva...'));
+        customSheetOptionsList.appendChild(newOpt);
+
+        // 2. (Opcional) Opción para no usar predeterminado
         const nullOpt = document.createElement('div');
         nullOpt.className = 'custom-option';
         nullOpt.innerHTML = '<span style="color: #64748b; font-style: italic;">(No usar predeterminado)</span>';
         nullOpt.addEventListener('click', () => handleOptionSelect('', '(No usar predeterminado)'));
         customSheetOptionsList.appendChild(nullOpt);
 
-        // 2. Opciones de Google Sheets
+        // 3. Opciones de Google Sheets
         sheets.forEach(file => {
             const opt = document.createElement('div');
             opt.className = `custom-option ${selectedSheetId === file.id ? 'selected' : ''}`;
@@ -201,13 +208,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             opt.addEventListener('click', () => handleOptionSelect(file.id, file.name));
             customSheetOptionsList.appendChild(opt);
         });
-
-        // 3. Opción de Crear Nuevo (Fija al final)
-        const newOpt = document.createElement('div');
-        newOpt.className = 'custom-option action-option';
-        newOpt.innerHTML = '<svg style="width:14px; height:14px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg> Crear mi primer Prospector Sheet';
-        newOpt.addEventListener('click', () => handleOptionSelect('NEW_SHEET', 'Crear Base de Datos Nueva...'));
-        customSheetOptionsList.appendChild(newOpt);
     };
 
     const handleOptionSelect = (id, name) => {
