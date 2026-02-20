@@ -8,17 +8,21 @@ const getUserId = async () => {
     return newId;
 };
 
+// URLs dinámicos de las imágenes
+const logo16 = chrome.runtime.getURL('assets/icon16.png');
+const logo48 = chrome.runtime.getURL('assets/icon48.png');
+
 // Interfaz HTML del Widget
 const widgetHTML = `
   <div id="apolloWidgetTrigger" class="ap-trigger">
-    <div style="width: 16px; height: 16px; background-color: #2563eb; color: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px;">MR</div>
+    <img src="${logo16}" style="width: 16px; height: 16px; border-radius: 4px;" alt="MR Prospect">
     <span>MR Prospect</span>
   </div>
 
   <div id="apolloWidgetPanel" class="apollo-prospector-widget">
     <div class="ap-header">
       <div class="ap-header-title">
-        <div class="ap-header-logo">MR</div>
+        <img src="${logo48}" class="ap-header-logo" alt="Logo" style="background: none;">
         MR Prospect
       </div>
       <button id="apCloseBtn" class="ap-close-btn">×</button>
