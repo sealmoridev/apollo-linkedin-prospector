@@ -40,7 +40,10 @@ export class SheetsService {
         return oauth2Client.generateAuthUrl({
             access_type: 'offline', // Para obtener refresh token
             prompt: 'consent', // Forzar consentimiento para asegurar el refresh token
-            scope: ['https://www.googleapis.com/auth/spreadsheets']
+            scope: [
+                'https://www.googleapis.com/auth/spreadsheets',
+                'https://www.googleapis.com/auth/drive.readonly'
+            ]
         });
     }
 
