@@ -2,8 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 // En un entorno de producción, esto debería ir a una base de datos real (PostgreSQL, MongoDB, etc.)
-// Para este MVP, guardaremos los tokens en memoria o en un archivo JSON local
-const TOKENS_FILE = path.join(process.cwd(), 'google-tokens.json');
+// Para este MVP en Railway, usaremos un Volumen Persistente si existe en /app/data
+const dataDir = fs.existsSync('/app/data') ? '/app/data' : process.cwd();
+const TOKENS_FILE = path.join(dataDir, 'google-tokens.json');
 
 export interface UserToken {
     accessToken: string;
