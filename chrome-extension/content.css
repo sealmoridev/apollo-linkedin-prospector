@@ -293,6 +293,23 @@ input:checked+.ap-slider:before {
   color: #64748b;
 }
 
+/* Success Button (Green overrides) */
+.ap-btn-success {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: white;
+}
+
+.ap-btn-success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+}
+
+.ap-btn-success:disabled {
+  background: #cbd5e1 !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+
 /* Cancel Link Button */
 .ap-btn-cancel {
   background: transparent;
@@ -518,18 +535,73 @@ input:checked+.ap-slider:before {
 
 .ap-email-radio-label {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   font-size: 13px;
   color: #334155;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
+  padding: 6px 8px;
+  /* Compressed padding */
+  border-radius: 6px;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.ap-email-radio-label.unselected-pulse {
+  animation: ap-pulse-border 2s infinite;
+  border-color: #e2e8f0;
 }
 
 .ap-email-radio-label:hover {
-  background: #f1f5f9;
+  background: #f8fafc;
+}
+
+.ap-email-radio-label.selected {
+  background: transparent;
+  /* No green background */
+  border-color: #d8b4fe;
+  /* soft purple */
+}
+
+@keyframes ap-pulse-border {
+  0% {
+    box-shadow: 0 0 0 0 rgba(153, 65, 192, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 4px rgba(153, 65, 192, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(153, 65, 192, 0);
+  }
+}
+
+.ap-primary-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.ap-email-bottom-row {
+  padding-left: 0 !important;
+  margin-left: -2px;
+  /* slight visual offset correction to match the font visual edge */
+}
+
+.ap-primary-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: #16a34a;
+  color: white;
+  padding: 4px;
+  border-radius: 6px;
+  margin-left: 6px;
 }
 
 .ap-email-radio-input {

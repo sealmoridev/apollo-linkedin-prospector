@@ -100,9 +100,9 @@ const widgetHTML = `
             <div class="ap-data-row-modern">
                 <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg></div>
                 <div class="ap-data-content" style="flex:1; min-width: 0;">
-                    <div class="ap-data-label-modern">Email</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <div class="ap-data-value-modern" id="apDataEmail" style="word-break: break-all;"></div>
+                    <div class="ap-data-label-modern" id="apDataEmailTitle">Email</div>
+                    <div id="apEmailControlsContainer" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <div class="ap-data-value-modern" id="apDataEmail" style="word-break: break-all; flex:1;"></div>
                         <button id="apValidateEmailBtn" class="ap-btn-validate" style="display: none;">Validar</button>
                         <div id="apEmailBadge" class="ap-badge" style="display: none;"></div>
                     </div>
@@ -118,7 +118,7 @@ const widgetHTML = `
           </div>
         </div>
 
-        <button id="apSaveBtn" class="ap-btn-primary" style="background-color: #16a34a;">
+        <button id="apSaveBtn" class="ap-btn-primary">
           <span class="ap-save-btn-text" style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</span>
           <span id="apSaveLoader" class="ap-loader"></span>
         </button>
@@ -237,23 +237,41 @@ const initializeWidgetLogic = async () => {
         const emailsRaw = [leadData.email, leadData.personalEmail].filter(Boolean).join(', ');
         const emailsList = emailsRaw ? emailsRaw.split(',').map(e => e.trim()).filter(Boolean) : [];
         const emailContainer = document.getElementById('apDataEmail');
+        const emailTitle = document.getElementById('apDataEmailTitle');
+        // The controlsContainer is no longer needed as elements are moved directly into emailContainer or its children
+        // const controlsContainer = document.getElementById('apEmailControlsContainer');
         emailContainer.innerHTML = ''; // Clear previous
 
         if (emailsList.length === 0) {
+            emailTitle.innerHTML = 'Email';
             emailContainer.textContent = 'Sin email';
             extractedLeadData.primaryEmail = null;
         } else if (emailsList.length === 1) {
+            emailTitle.innerHTML = 'Email';
             emailContainer.textContent = emailsList[0];
             extractedLeadData.primaryEmail = emailsList[0];
+            // Asegurar que validación vuelva a su lugar por defecto
+            const controlsContainer = document.getElementById('apEmailControlsContainer');
+            if (controlsContainer) {
+                controlsContainer.appendChild(validateEmailBtn);
+                controlsContainer.appendChild(emailBadge);
+            }
         } else {
             // Multiple emails - Create radio buttons (force selection)
+            emailTitle.innerHTML = '<span id="apEmailTitleHint" style="color:#9941c0;">Selecciona Email Principal</span>';
             extractedLeadData.primaryEmail = null;
             const groupDiv = document.createElement('div');
             groupDiv.className = 'ap-email-radio-group';
 
             emailsList.forEach((email, index) => {
                 const label = document.createElement('label');
-                label.className = 'ap-email-radio-label';
+                label.className = 'ap-email-radio-label unselected-pulse';
+
+                // Top row: Radio + Text
+                const topRow = document.createElement('div');
+                topRow.style.display = 'flex';
+                topRow.style.alignItems = 'center';
+                topRow.style.gap = '8px';
 
                 const radio = document.createElement('input');
                 radio.type = 'radio';
@@ -262,10 +280,75 @@ const initializeWidgetLogic = async () => {
                 radio.value = email;
                 // Ninguno pre-seleccionado
 
+                const textSpan = document.createElement('span');
+                textSpan.textContent = email;
+                textSpan.style.flex = '1';
+                textSpan.style.wordBreak = 'break-all';
+
+                const primaryCheck = document.createElement('span');
+                primaryCheck.className = 'ap-primary-check';
+                primaryCheck.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#9941c0" stroke="#9941c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+                primaryCheck.style.display = 'none';
+
+                topRow.appendChild(radio);
+                topRow.appendChild(textSpan);
+                topRow.appendChild(primaryCheck);
+                label.appendChild(topRow);
+
+                // Bottom row: Button + Notes
+                const bottomRow = document.createElement('div');
+                bottomRow.className = 'ap-email-bottom-row';
+                bottomRow.style.display = 'none'; // Hidden entirely to save space before selection
+                bottomRow.style.alignItems = 'center';
+                bottomRow.style.gap = '8px';
+                bottomRow.style.marginTop = '4px';
+
+                const noteSpan = document.createElement('span');
+                noteSpan.className = 'ap-email-note';
+                noteSpan.style.fontSize = '11px';
+                noteSpan.style.color = '#64748b';
+                noteSpan.textContent = 'Se guardará en notas';
+                noteSpan.style.display = 'none'; // ocultar por defecto hasta que haya selección
+                bottomRow.appendChild(noteSpan);
+
+                label.appendChild(bottomRow);
+                groupDiv.appendChild(label);
+
                 radio.addEventListener('change', (e) => {
                     if (e.target.checked) {
                         extractedLeadData.primaryEmail = e.target.value;
                         extractedLeadData.emailStatus = 'Sin verificar'; // Reset validation status for new selection
+
+                        // Ocultar el hint del Email Title reinstaurando el texto base
+                        const hint = document.getElementById('apEmailTitleHint');
+                        if (hint) emailTitle.innerHTML = 'Email';
+
+                        // Limpiar todas las filas
+                        document.querySelectorAll('.ap-email-radio-label').forEach(lbl => {
+                            lbl.classList.remove('unselected-pulse');
+                            lbl.classList.remove('selected');
+
+                            const check = lbl.querySelector('.ap-primary-check');
+                            if (check) check.style.display = 'none';
+
+                            const bRow = lbl.querySelector('.ap-email-bottom-row');
+                            if (bRow) bRow.style.display = 'flex'; // show for notes/buttons
+
+                            const note = lbl.querySelector('.ap-email-note');
+                            if (note) note.style.display = 'inline'; // todos muestran la nota
+                        });
+
+                        label.classList.add('selected');
+
+                        // Show check on selected
+                        primaryCheck.style.display = 'inline-flex';
+
+                        // Ocultar nota en el seleccionado
+                        noteSpan.style.display = 'none';
+
+                        // Mover el botón Validar aquí mismo
+                        bottomRow.appendChild(validateEmailBtn);
+                        bottomRow.appendChild(emailBadge);
 
                         // Habilitar Validar
                         if (emailBadge) emailBadge.style.display = 'none';
@@ -278,16 +361,15 @@ const initializeWidgetLogic = async () => {
                         // Habilitar Guardar
                         if (saveBtn) {
                             saveBtn.disabled = false;
-                            if (saveBtnText) saveBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</div>';
                         }
                     }
                 });
-
-                label.appendChild(radio);
-                label.appendChild(document.createTextNode(email));
-                groupDiv.appendChild(label);
             });
             emailContainer.appendChild(groupDiv);
+
+            // Ocultar la zona global de "Validar" si son múltiples inicialmente
+            validateEmailBtn.style.display = 'none';
+            emailBadge.style.display = 'none';
         }
 
         document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
@@ -306,7 +388,7 @@ const initializeWidgetLogic = async () => {
 
         if (!extractedLeadData.primaryEmail && emailsList.length > 1 && saveBtn) {
             saveBtn.disabled = true;
-            if (saveBtnText) saveBtnText.innerHTML = 'Selecciona Email Primario';
+            // Removed custom text to avoid breaking default button layout/SVG
         }
     };
 
