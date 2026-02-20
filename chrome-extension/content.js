@@ -274,15 +274,23 @@ const initializeWidgetLogic = async () => {
 
                 if (!hasDefaultSheet) {
                     // Autenticado pero SIN hoja configurada
+                    // En vez de rojo chillón, usamos amarillo/naranja y un texto más amigable
                     authStatusText.innerHTML = '<span class="indicator">⚠️</span> Falta Configurar Hoja';
-                    authStatusText.className = 'ap-auth-status disconnected'; // rojo/naranja
-                    newLoginBtn.innerHTML = '⚙️ Configurar Hoja de Google';
+                    authStatusText.className = 'ap-auth-status disconnected';
+
+                    newLoginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
                     newLoginBtn.style.display = 'flex';
-                    newLoginBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: "openOptionsPage" }));
-                    extractBtn.disabled = true;
+                    newLoginBtn.onclick = () => chrome.runtime.sendMessage({ action: "openOptionsPage" });
+
+                    // Solo deshabilitar si está en la URL incorrecta, no castigarlo
+                    if (!currentLinkedinUrl.includes('linkedin.com/in/')) {
+                        extractBtn.disabled = true;
+                    } else {
+                        extractBtn.disabled = false; // Permitimos extraer, fallará elegante en el paso 2
+                    }
                 } else {
                     // Autenticado y CON hoja
-                    authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets';
+                    authStatusText.innerHTML = '<span class="indicator">🟢</span> Conectado a Sheets (Auto-Sync)';
                     authStatusText.className = 'ap-auth-status connected';
                     newLoginBtn.style.display = 'none';
                     if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
