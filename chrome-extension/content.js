@@ -61,7 +61,7 @@ const widgetHTML = `
         </div>
 
         <button id="apExtractBtn" class="ap-btn-primary" disabled>
-          <span class="ap-btn-text">Extraer Datos de Apollo</span>
+          <span class="ap-btn-text">Extraer Datos</span>
           <span id="apExtractLoader" class="ap-loader"></span>
         </button>
       </div>
@@ -69,13 +69,43 @@ const widgetHTML = `
       <!-- PASO 2: Pre-visualización y Guardado -->
       <div id="apPreviewSection" class="ap-preview-section">
         
-        <div class="ap-card" style="background-color: #f8fafc; border-color: #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-          <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #0f172a; text-align: center;">Datos Encontrados</div>
-          <div class="ap-data-row"><span class="ap-data-label">Nombre:</span><span class="ap-data-value" id="apDataName"></span></div>
-          <div class="ap-data-row"><span class="ap-data-label">Título:</span><span class="ap-data-value" id="apDataTitle"></span></div>
-          <div class="ap-data-row"><span class="ap-data-label">Empresa:</span><span class="ap-data-value" id="apDataCompany"></span></div>
-          <div class="ap-data-row"><span class="ap-data-label">Email:</span><span class="ap-data-value" id="apDataEmail"></span></div>
-          <div class="ap-data-row"><span class="ap-data-label">Teléfono:</span><span class="ap-data-value" id="apDataPhone"></span></div>
+        <div class="ap-card" style="background-color: #ffffff; padding: 0; overflow: hidden; border-color: #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <div style="background-color: #f8fafc; padding: 12px 16px; border-bottom: 1px solid rgba(226, 232, 240, 0.8); display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 12px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Prospecto Extraído</div>
+            <button id="apCopyDataBtn" class="ap-icon-btn" title="Copiar Datos" style="background: none; border: none; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; transition: all 0.2s;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div class="ap-data-row-modern">
+                <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>
+                <div class="ap-data-content">
+                    <div class="ap-data-label-modern">Nombre</div>
+                    <div class="ap-data-value-modern" id="apDataName"></div>
+                </div>
+            </div>
+            <div class="ap-data-row-modern">
+                <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg></div>
+                <div class="ap-data-content">
+                    <div class="ap-data-label-modern">Título y Empresa</div>
+                    <div class="ap-data-value-modern" id="apDataTitleCompany"></div>
+                </div>
+            </div>
+            <div class="ap-data-row-modern">
+                <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg></div>
+                <div class="ap-data-content">
+                    <div class="ap-data-label-modern">Email</div>
+                    <div class="ap-data-value-modern" id="apDataEmail"></div>
+                </div>
+            </div>
+            <div class="ap-data-row-modern">
+                <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg></div>
+                <div class="ap-data-content">
+                    <div class="ap-data-label-modern">Teléfono</div>
+                    <div class="ap-data-value-modern" id="apDataPhone"></div>
+                </div>
+            </div>
+          </div>
         </div>
 
         <button id="apSaveBtn" class="ap-btn-primary" style="background-color: #16a34a;">
@@ -172,8 +202,9 @@ const initializeWidgetLogic = async () => {
 
         // Populate card
         document.getElementById('apDataName').textContent = leadData.fullName || leadData.firstName || 'Sin nombre';
-        document.getElementById('apDataTitle').textContent = leadData.title || 'Sin título';
-        document.getElementById('apDataCompany').textContent = leadData.company || 'Sin empresa';
+        const titleStr = leadData.title || 'Sin título';
+        const companyStr = leadData.company || 'Sin empresa';
+        document.getElementById('apDataTitleCompany').textContent = `${titleStr} - ${companyStr}`;
         document.getElementById('apDataEmail').textContent = leadData.email || leadData.personalEmail || 'Sin email';
         document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
     };
@@ -277,9 +308,16 @@ const initializeWidgetLogic = async () => {
                     // Autenticado y CON hoja
                     let sheetNameHtml = storageConfig.defaultSheetName || 'Tu Base de Datos';
                     if (storageConfig.defaultSheetId !== 'NEW_SHEET') {
-                        sheetNameHtml = `<a href="https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit" target="_blank" title="Abrir Base de Datos" style="color: #2563eb; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; padding-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">📄 ${sheetNameHtml} <svg style="width:12px; height:12px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>`;
+                        sheetNameHtml = `<a href="https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit" target="_blank" title="Abrir Base de Datos" style="color: #0f172a; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; padding-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
+                            <svg style="width:16px; height:16px; flex-shrink: 0; color: #0f9d58;" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3.9 16.1h-6.2v-2.2h6.2v2.2zm0-4.3h-6.2v-2.2h6.2v2.2zm0-4.4h-6.2V8.2h6.2v2.2zm-7.6 8.7H5V8.2h2.5v10.9zm13.1 0h-2.5V8.2h2.5v10.9z"/></svg>
+                            ${sheetNameHtml}
+                            <svg style="width:12px; height:12px; flex-shrink: 0; color: #64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                        </a>`;
                     } else {
-                        sheetNameHtml = `<div style="padding-top: 4px; font-weight: 600; color: #0f172a;">✨ ${sheetNameHtml} (Pendiente de Creación)</div>`;
+                        sheetNameHtml = `<div style="padding-top: 4px; font-weight: 600; color: #0f172a; display: inline-flex; align-items: center; gap: 6px;">
+                            <svg style="width:16px; height:16px; flex-shrink: 0; color: #0f9d58;" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3.9 16.1h-6.2v-2.2h6.2v2.2zm0-4.3h-6.2v-2.2h6.2v2.2zm0-4.4h-6.2V8.2h6.2v2.2zm-7.6 8.7H5V8.2h2.5v10.9zm13.1 0h-2.5V8.2h2.5v10.9z"/></svg>
+                            ${sheetNameHtml} (Pendiente)
+                        </div>`;
                     }
                     authStatusText.innerHTML = `<span class="indicator">🟢</span> Enlazado a:<br>${sheetNameHtml}`;
                     authStatusText.className = 'ap-auth-status connected';
@@ -371,25 +409,40 @@ const initializeWidgetLogic = async () => {
 
             if (data.success && data.data) {
                 showPreviewState(data.data);
-
-                // --- AUTO SAVE ---
-                const storageConfig = await chrome.storage.sync.get(['defaultSheetId']);
-                if (storageConfig.defaultSheetId) {
-                    saveBtn.click();
-                }
             }
         } catch (error) {
             console.error('Extraction error:', error);
             showMessage(`Error extractivo: ${error.message} `, true);
         } finally {
             extractBtn.disabled = false;
-            extractBtnText.textContent = 'Extraer Datos de Apollo';
+            extractBtnText.textContent = 'Extraer Datos';
             extractLoader.style.display = 'none';
         }
     });
 
-    // --- ACCIÓN: CAnCELAR (VOLVER AL PASO 1) ---
+    // --- ACCIÓN: CELULAR Y COPIAR ---
     cancelBtn.addEventListener('click', resetToExtractState);
+
+    const copyBtn = document.getElementById('apCopyDataBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            if (!extractedLeadData) return;
+            const emails = [extractedLeadData.email, extractedLeadData.personalEmail].filter(Boolean).join(', ');
+            const textToCopy = [
+                extractedLeadData.fullName || extractedLeadData.firstName || 'Sin nombre',
+                emails || 'Sin email',
+                extractedLeadData.title || 'Sin título',
+                extractedLeadData.company || 'Sin empresa',
+                extractedLeadData.phoneNumber || 'Sin teléfono'
+            ].join('\t');
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                setTimeout(() => { copyBtn.innerHTML = originalHtml; }, 2000);
+            }).catch(err => console.error('Error copiando:', err));
+        });
+    }
 
     // --- ACCIÓN: GUARDAR EN SHEETS (PASO 2) ---
     saveBtn.addEventListener('click', async () => {
