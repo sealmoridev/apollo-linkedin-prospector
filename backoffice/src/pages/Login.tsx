@@ -36,7 +36,7 @@ export default function Login() {
             {/* Panel izquierdo — branding */}
             <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center bg-primary px-12">
                 <img
-                    src="/mrprospect-logo.png"
+                    src={`${import.meta.env.BASE_URL}mrprospect-logo.png`}
                     alt="MR. PROSPECT"
                     className="w-72 brightness-0 invert"
                 />
@@ -50,7 +50,7 @@ export default function Login() {
                 <div className="w-full max-w-sm space-y-8">
                     {/* Logo mobile */}
                     <div className="flex justify-center lg:hidden">
-                        <img src="/isotipo.png" alt="MR. PROSPECT" className="h-14" />
+                        <img src={`${import.meta.env.BASE_URL}isotipo.png`} alt="MR. PROSPECT" className="h-14" />
                     </div>
 
                     <div className="space-y-2">

@@ -153,11 +153,11 @@ export function Sidebar() {
             <div className={`flex h-16 items-center justify-between border-b shrink-0 ${collapsed ? 'px-2' : 'px-4'}`}>
                 {collapsed ? (
                     <Link to="/" className="flex items-center" title="MR. PROSPECT">
-                        <img src="/isotipo.png" alt="MR. PROSPECT" className="h-7 w-7 object-contain" />
+                        <img src={`${import.meta.env.BASE_URL}isotipo.png`} alt="MR. PROSPECT" className="h-7 w-7 object-contain" />
                     </Link>
                 ) : (
                     <Link to="/" className="flex items-center gap-2.5 overflow-hidden">
-                        <img src="/isotipo.png" alt="MR. PROSPECT" className="h-7 w-7 object-contain shrink-0" />
+                        <img src={`${import.meta.env.BASE_URL}isotipo.png`} alt="MR. PROSPECT" className="h-7 w-7 object-contain shrink-0" />
                         <span className="font-bold text-sm tracking-wide text-foreground whitespace-nowrap">
                             MR. PROSPECT
                         </span>
