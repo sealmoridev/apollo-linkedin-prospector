@@ -1,7 +1,9 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "openOptionsPage") {
         chrome.runtime.openOptionsPage();
+        sendResponse({ ok: true });
     }
+    return true; // keep message channel open
 });
 
 // Opcional: Permitir que al hacer click en el icono de la extensión se fije/muestre el panel

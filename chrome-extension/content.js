@@ -29,6 +29,37 @@ const widgetHTML = `
     </div>
 
     <div class="ap-body">
+
+      <!-- ONBOARDING — se muestra si no hay API Key configurada -->
+      <div id="apOnboarding" class="ap-onboarding" style="display:none;">
+        <div class="ap-ob-brand">
+          <div class="ap-ob-logo-ring">
+            <img src="${logo48}" alt="MR Prospect" class="ap-ob-logo-img">
+          </div>
+          <span class="ap-ob-brand-name">MR Prospect</span>
+        </div>
+        <div class="ap-ob-copy">
+          <h2 class="ap-ob-title">¡Bienvenido!</h2>
+          <p class="ap-ob-subtitle">Ingresa la clave de tu empresa para comenzar a prospectar en LinkedIn.</p>
+        </div>
+        <div class="ap-ob-field-wrap">
+          <div class="ap-ob-input-group">
+            <input type="password" id="apOnboardingKey" class="ap-ob-input" placeholder="mrp_••••••••••••" autocomplete="off" spellcheck="false">
+            <button type="button" id="apObToggle" class="ap-ob-toggle" title="Mostrar/ocultar">
+              <svg id="apObEye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <p class="ap-ob-hint">Obtenla en el backoffice → <button type="button" id="apObOptionsLink" class="ap-ob-link">Configuración</button></p>
+        </div>
+        <button id="apOnboardingBtn" class="ap-ob-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+          Comenzar
+        </button>
+        <p id="apObError" class="ap-ob-error"></p>
+      </div>
+
       <!-- Sección de Auth -->
       <div id="apAuthSection" class="ap-auth-section">
         <div class="ap-auth-title">Google Sheets Sync</div>
@@ -181,6 +212,15 @@ const initializeWidgetLogic = async () => {
     const resultDiv = document.getElementById('apResultDiv');
     const optionsLink = document.getElementById('apOptionsLink');
 
+    // Onboarding elements
+    const onboardingSection = document.getElementById('apOnboarding');
+    const onboardingInput = document.getElementById('apOnboardingKey');
+    const onboardingBtn = document.getElementById('apOnboardingBtn');
+    const onboardingError = document.getElementById('apObError');
+    const obToggle = document.getElementById('apObToggle');
+    const obEye = document.getElementById('apObEye');
+    const obOptionsLink = document.getElementById('apObOptionsLink');
+
     // Estado Interno
     let currentLinkedinUrl = window.location.href;
     let apiUrl = 'http://localhost:3000';
@@ -188,6 +228,57 @@ const initializeWidgetLogic = async () => {
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
     let hasExtractedCurrentProfile = false; // Bandera para State 3
+
+    // --- ONBOARDING ---
+
+    const showOnboarding = () => {
+        onboardingSection.style.display = 'flex';
+        authSection.style.display = 'none';
+        extractSection.style.display = 'none';
+        previewSection.style.display = 'none';
+    };
+
+    const hideOnboarding = () => {
+        onboardingSection.style.display = 'none';
+    };
+
+    // Toggle show/hide key
+    obToggle.addEventListener('click', () => {
+        const hidden = onboardingInput.type === 'password';
+        onboardingInput.type = hidden ? 'text' : 'password';
+        obEye.innerHTML = hidden
+            ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+            : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+    });
+
+    // Open options from onboarding hint
+    obOptionsLink.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
+    });
+
+    // Save key from onboarding
+    onboardingBtn.addEventListener('click', async () => {
+        const key = onboardingInput.value.trim();
+        if (!key) {
+            onboardingError.textContent = 'Ingresa la API Key para continuar.';
+            return;
+        }
+        onboardingError.textContent = '';
+        onboardingBtn.disabled = true;
+        onboardingBtn.innerHTML = '<span class="ap-loader" style="display:inline-block;border-color:#fff transparent transparent;width:14px;height:14px;margin-right:8px;"></span>Verificando...';
+
+        await chrome.storage.sync.set({ tenantApiKey: key });
+        tenantApiKey = key;
+        onboardingBtn.disabled = false;
+        onboardingBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>Comenzar';
+        hideOnboarding();
+        await checkAuthStatus();
+    });
+
+    // Allow Enter key in the onboarding input
+    onboardingInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') onboardingBtn.click();
+    });
 
     // --- FUNCIONES UI GENERALES ---
 
@@ -488,14 +579,13 @@ const initializeWidgetLogic = async () => {
 
             // Verificar que la clave de empresa esté configurada
             if (!tenantApiKey) {
-                authStatusText.innerHTML = '<svg class="indicator" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Falta la Clave de Empresa';
-                authStatusText.className = 'ap-auth-status disconnected';
-                loginBtn.innerHTML = '⚙️ Configurar Clave en Opciones';
-                loginBtn.style.display = 'flex';
-                loginBtn.onclick = () => chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-                extractBtn.disabled = true;
+                showOnboarding();
                 return;
             }
+
+            // Key presente: ocultar onboarding y asegurar que las secciones principales estén visibles
+            hideOnboarding();
+            extractSection.style.display = 'flex';
 
             const response = await fetch(`${apiUrl}/api/auth/status?userId=${userId}`);
             if (!response.ok) {
@@ -619,8 +709,7 @@ const initializeWidgetLogic = async () => {
                 headers: {
                     'Content-Type': 'application/json',
                     'x-api-key': tenantApiKey,
-                    'x-google-id': userId,
-                    'x-google-email': sdrEmail
+                    'x-google-id': userId
                 },
                 body: JSON.stringify({
                     linkedinUrl: currentLinkedinUrl,
