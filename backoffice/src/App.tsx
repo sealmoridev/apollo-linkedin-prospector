@@ -22,7 +22,7 @@ function App() {
   return (
     <AuthProvider>
       <ActiveEmpresaProvider>
-        <BrowserRouter>
+        <BrowserRouter basename="/admin">
           <Routes>
             <Route path="/login" element={<Login />} />
 
