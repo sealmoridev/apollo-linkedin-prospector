@@ -10,7 +10,12 @@ export interface UserToken {
     accessToken: string;
     refreshToken: string;
     expiryDate: number;
-    spreadsheetId?: string; // Guardaremos aquí el ID de la hoja dinámica que creemos
+    spreadsheetId?: string;
+    googleProfile?: {
+        email: string;
+        nombre: string;
+        avatar_url: string;
+    };
 }
 
 export class TokenStorage {

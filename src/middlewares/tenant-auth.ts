@@ -58,17 +58,25 @@ export const tenantAuthMiddleware = async (req: Request, res: Response, next: Ne
         });
 
         if (!extensionUser) {
-            if (!email) {
+            // Intentar usar el perfil de Google guardado en tokenStorage
+            const { tokenStorage } = await import('../services/token-storage');
+            const storedToken = tokenStorage.getToken(googleId);
+            const profile = storedToken?.googleProfile;
+
+            const resolvedEmail = profile?.email || email;
+            if (!resolvedEmail) {
                 return res.status(400).json({
                     error: 'Bad Request',
-                    message: 'User not registered. Please provide x-google-email in headers for first-time auto-registration.'
+                    message: 'User not registered. Connect Google first via /api/auth/google.'
                 });
             }
 
             extensionUser = await prisma.extensionUser.create({
                 data: {
                     id: googleId,
-                    email: email,
+                    email: resolvedEmail,
+                    nombre: profile?.nombre || null,
+                    avatar_url: profile?.avatar_url || null,
                     empresa_id: empresa.id
                 }
             });

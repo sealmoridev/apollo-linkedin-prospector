@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import path from 'path';
+import { google } from 'googleapis';
 import { WebhookServer } from './services/webhook-server';
 import { EnrichmentService } from './services/enrichment-service';
 import { SheetsService } from './services/sheets-service';
@@ -388,12 +389,43 @@ app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
   try {
     const tokens = await sheetsService.getTokensFromCode(code);
 
-    // Guardar tokens en nuestro "almacenamiento"
+    // Obtener perfil de Google (email, nombre, avatar)
+    let googleProfile: { email: string; nombre: string; avatar_url: string } | undefined;
+    try {
+      const oauth2Client = sheetsService.getOAuthClient();
+      oauth2Client.setCredentials(tokens);
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const { data } = await oauth2.userinfo.get();
+      if (data.email) {
+        googleProfile = {
+          email: data.email,
+          nombre: data.name || data.email,
+          avatar_url: data.picture || ''
+        };
+      }
+    } catch (profileErr) {
+      console.warn('[OAuth] No se pudo obtener perfil de Google:', profileErr);
+    }
+
+    // Guardar tokens + perfil en storage
     tokenStorage.setToken(userId, {
       accessToken: tokens.access_token || '',
       refreshToken: tokens.refresh_token || '',
-      expiryDate: tokens.expiry_date || 0
+      expiryDate: tokens.expiry_date || 0,
+      ...(googleProfile && { googleProfile })
     });
+
+    // Actualizar ExtensionUser si ya existe
+    if (googleProfile) {
+      await prisma.extensionUser.updateMany({
+        where: { id: userId },
+        data: {
+          email: googleProfile.email,
+          nombre: googleProfile.nombre,
+          avatar_url: googleProfile.avatar_url || null
+        }
+      });
+    }
 
     console.log(`✅ [OAuth] Tokens guardados para el usuario: ${userId}`);
 

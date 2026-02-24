@@ -13,7 +13,7 @@ import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
     CartesianGrid, Tooltip
 } from 'recharts';
-import { Users, Zap, CheckCircle, Activity } from 'lucide-react';
+import { Users, Zap, CheckCircle, Activity, RefreshCw } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -77,6 +77,7 @@ export default function MiEmpresa() {
     const [consumos, setConsumos] = useState<Consumo[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingConsumos, setLoadingConsumos] = useState(false);
+    const [refreshingUsuarios, setRefreshingUsuarios] = useState(false);
 
     // Date range
     const [preset, setPreset] = useState<RangePreset>('7d');
@@ -126,6 +127,15 @@ export default function MiEmpresa() {
     const applyPreset = (p: Exclude<RangePreset, 'custom'>) => {
         setPreset(p);
         setAppliedRange(presetRange(p));
+    };
+
+    const refreshUsuarios = () => {
+        if (!empresa) return;
+        setRefreshingUsuarios(true);
+        getEmpresaUsuarios(empresa.id)
+            .then(setUsuarios)
+            .catch(() => toast.error('Error al recargar usuarios'))
+            .finally(() => setRefreshingUsuarios(false));
     };
 
     const applyCustom = () => {
@@ -392,8 +402,11 @@ export default function MiEmpresa() {
 
             {/* SDRs registrados */}
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
                     <CardTitle>SDRs registrados ({usuarios.length})</CardTitle>
+                    <Button variant="ghost" size="sm" onClick={refreshUsuarios} disabled={refreshingUsuarios} className="h-8 w-8 p-0">
+                        <RefreshCw className={`h-4 w-4 ${refreshingUsuarios ? 'animate-spin' : ''}`} />
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     {usuarios.length === 0 ? (
@@ -404,7 +417,7 @@ export default function MiEmpresa() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Email</TableHead>
+                                    <TableHead>SDR</TableHead>
                                     <TableHead className="text-right">Búsquedas totales</TableHead>
                                     <TableHead>Desde</TableHead>
                                 </TableRow>
@@ -412,7 +425,20 @@ export default function MiEmpresa() {
                             <TableBody>
                                 {usuarios.map(u => (
                                     <TableRow key={u.id}>
-                                        <TableCell className="font-medium">{u.email}</TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2.5">
+                                                {u.avatar_url
+                                                    ? <img src={u.avatar_url} alt={u.nombre || u.email} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                                                    : <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                                                        {(u.nombre || u.email).charAt(0).toUpperCase()}
+                                                      </div>
+                                                }
+                                                <div>
+                                                    {u.nombre && <p className="text-sm font-medium leading-none">{u.nombre}</p>}
+                                                    <p className={`text-muted-foreground ${u.nombre ? 'text-xs mt-0.5' : 'text-sm font-medium'}`}>{u.email}</p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <Badge variant="outline">{u._count.consumos}</Badge>
                                         </TableCell>

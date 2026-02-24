@@ -21,6 +21,8 @@ export interface EmpresaDetail {
 export interface ExtensionUser {
     id: string;
     email: string;
+    nombre: string | null;
+    avatar_url: string | null;
     empresa_id: string;
     createdAt: string;
     updatedAt: string;

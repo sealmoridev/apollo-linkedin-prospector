@@ -185,7 +185,6 @@ const initializeWidgetLogic = async () => {
     let currentLinkedinUrl = window.location.href;
     let apiUrl = 'http://localhost:3000';
     let tenantApiKey = '';
-    let sdrEmail = '';
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
     let hasExtractedCurrentProfile = false; // Bandera para State 3
@@ -481,12 +480,11 @@ const initializeWidgetLogic = async () => {
             // Desactiva el botón de login durante la carga para evitar spam
             loginBtn.style.display = 'none';
 
-            const result = await chrome.storage.sync.get(['apiUrl', 'tenantApiKey', 'sdrEmail']);
+            const result = await chrome.storage.sync.get(['apiUrl', 'tenantApiKey']);
             if (result.apiUrl) {
                 apiUrl = result.apiUrl.replace(/\/$/, "");
             }
             if (result.tenantApiKey) tenantApiKey = result.tenantApiKey;
-            if (result.sdrEmail) sdrEmail = result.sdrEmail;
 
             // Verificar que la clave de empresa esté configurada
             if (!tenantApiKey) {
@@ -494,7 +492,7 @@ const initializeWidgetLogic = async () => {
                 authStatusText.className = 'ap-auth-status disconnected';
                 loginBtn.innerHTML = '⚙️ Configurar Clave en Opciones';
                 loginBtn.style.display = 'flex';
-                loginBtn.onclick = () => chrome.runtime.openOptionsPage();
+                loginBtn.onclick = () => chrome.runtime.sendMessage({ action: 'openOptionsPage' });
                 extractBtn.disabled = true;
                 return;
             }
@@ -522,7 +520,7 @@ const initializeWidgetLogic = async () => {
 
                     loginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
                     loginBtn.style.display = 'flex';
-                    loginBtn.onclick = () => chrome.runtime.openOptionsPage();
+                    loginBtn.onclick = () => chrome.runtime.sendMessage({ action: 'openOptionsPage' });
 
                     if (!currentLinkedinUrl.includes('linkedin.com/in/')) {
                         extractBtn.disabled = true;
@@ -600,7 +598,7 @@ const initializeWidgetLogic = async () => {
     });
 
     optionsLink.addEventListener('click', () => {
-        chrome.runtime.openOptionsPage();
+        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
     });
 
 
@@ -689,8 +687,7 @@ const initializeWidgetLogic = async () => {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-key': tenantApiKey,
-                        'x-google-id': userId,
-                        'x-google-email': sdrEmail
+                        'x-google-id': userId
                     },
                     body: JSON.stringify({ email: emailToVerify })
                 });
