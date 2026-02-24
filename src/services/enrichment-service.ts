@@ -7,12 +7,10 @@ import { EnrichedLead, FailedEnrichment, EnrichmentBatchResult } from '../types'
  * Servicio de enriquecimiento de leads desde LinkedIn usando Apollo.io
  */
 export class EnrichmentService {
-  private apolloClient: ApolloClient;
   private webhookServer?: WebhookServer;
 
-  constructor(apolloApiKey: string, webhookServer?: WebhookServer) {
+  constructor(webhookServer?: WebhookServer) {
     this.webhookServer = webhookServer;
-    this.apolloClient = new ApolloClient(apolloApiKey, webhookServer);
   }
 
   /**
@@ -23,13 +21,15 @@ export class EnrichmentService {
    * @returns Lead enriquecido
    */
   async enrichProfile(
-    linkedinUrl: string, 
+    apolloApiKey: string,
+    linkedinUrl: string,
     userId?: string,
     includePhone: boolean = false
   ): Promise<EnrichedLead> {
+    const apolloClient = new ApolloClient(apolloApiKey, this.webhookServer);
     // Validar URL
     const validation = validateLinkedInUrl(linkedinUrl);
-    
+
     if (!validation.isValid) {
       throw new Error(`Invalid LinkedIn URL: ${validation.error}`);
     }
@@ -39,17 +39,17 @@ export class EnrichmentService {
 
     try {
       // Llamar a Apollo API
-      const enrichedLead = await this.apolloClient.enrichProfile(normalizedUrl, {
+      const enrichedLead = await apolloClient.enrichProfile(normalizedUrl, {
         revealPersonalEmails: true,
         revealPhoneNumber: includePhone
       });
 
       // TODO: Guardar en base de datos cuando esté implementada
       // TODO: Registrar en activity log cuando esté implementado
-      
+
       console.log(`✓ Profile enriched successfully: ${enrichedLead.fullName || 'Unknown'}`);
       console.log(`  Credits consumed: ${enrichedLead.creditsConsumed}`);
-      
+
       return enrichedLead;
     } catch (error) {
       console.error(`✗ Failed to enrich profile: ${normalizedUrl}`);
@@ -66,6 +66,7 @@ export class EnrichmentService {
    * @returns Resultado del batch con éxitos y fallos
    */
   async enrichProfiles(
+    apolloApiKey: string,
     linkedinUrls: string[],
     userId?: string,
     includePhone: boolean = false
@@ -84,7 +85,7 @@ export class EnrichmentService {
 
     // Procesar en paralelo con Promise.allSettled
     const results = await Promise.allSettled(
-      uniqueUrls.map(url => this.enrichProfile(url, userId, includePhone))
+      uniqueUrls.map(url => this.enrichProfile(apolloApiKey, url, userId, includePhone))
     );
 
     // Procesar resultados
@@ -97,7 +98,7 @@ export class EnrichmentService {
       } else {
         const error = result.reason;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        
+
         // Determinar código de error
         let errorCode: FailedEnrichment['errorCode'] = 'API_ERROR';
         if (errorMessage.includes('Invalid LinkedIn URL')) {
@@ -130,8 +131,9 @@ export class EnrichmentService {
   /**
    * Verifica los créditos disponibles en Apollo
    */
-  async checkCredits() {
-    return this.apolloClient.checkCredits();
+  async checkCredits(apolloApiKey: string) {
+    const apolloClient = new ApolloClient(apolloApiKey, this.webhookServer);
+    return apolloClient.checkCredits();
   }
 
   /**

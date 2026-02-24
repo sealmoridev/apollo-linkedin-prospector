@@ -29,13 +29,14 @@ async function main() {
     process.exit(1);
   }
 
-  const service = new EnrichmentService(apiKey);
-
-  console.log('🚀 Enriqueciendo múltiples perfiles de LinkedIn...\n');
-  console.log(`Total de URLs: ${linkedinUrls.length}\n`);
+  const service = new EnrichmentService();
 
   try {
-    const result = await service.enrichProfiles(linkedinUrls);
+    console.log(`Iniciando enriquecimiento batch de ${linkedinUrls.length} perfiles...`);
+    console.log('Urls:', linkedinUrls);
+    console.log('---');
+
+    const result = await service.enrichProfiles(apiKey, linkedinUrls);
 
     console.log('\n═══════════════════════════════════════════════════════');
     console.log('📊 RESUMEN DEL BATCH');

@@ -18,3 +18,5 @@ Thumbs.db
 
 google-credentials.json
 google-tokens.json
+
+/src/generated/prisma

@@ -43,18 +43,18 @@ async function main() {
 
   // Iniciar servidor webhook
   const webhookServer = new WebhookServer(webhookPort, publicWebhookUrl);
-  
+
   try {
     await webhookServer.start();
-    
+
     // Crear servicio de enriquecimiento con webhook
-    const service = new EnrichmentService(apiKey, webhookServer);
+    const service = new EnrichmentService(webhookServer);
 
     console.log(`📋 Enriqueciendo perfil: ${linkedinUrl}\n`);
     console.log('⏳ Esperando respuesta de Apollo (esto puede tomar 30-60 segundos)...\n');
 
     // Enriquecer perfil CON teléfono
-    const lead = await service.enrichProfile(linkedinUrl, undefined, true);
+    const lead = await service.enrichProfile(apiKey, linkedinUrl, undefined, true);
 
     console.log('\n✅ ¡Perfil enriquecido exitosamente!\n');
     console.log('📊 Datos extraídos:');

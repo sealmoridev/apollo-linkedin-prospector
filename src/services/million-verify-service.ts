@@ -11,11 +11,9 @@ export class MillionVerifyService {
     /**
      * Valida un correo usando la API de MillionVerify
      */
-    async verifyEmail(email: string): Promise<VerificationResult> {
-        const apiKey = process.env.MILLION_VERIFY_API_KEY || '';
-
+    async verifyEmail(apiKey: string, email: string): Promise<VerificationResult> {
         if (!apiKey || apiKey === 'tu_api_key_aqui') {
-            console.warn('⚠️ [MillionVerify] API Key no configurada. Agrega MILLION_VERIFY_API_KEY a tu .env');
+            console.warn('⚠️ [MillionVerify] API Key no proporcionada para este tenant.');
             return { email, status: 'error', rawCode: 0, message: 'API Key de validación faltante en el servidor.' };
         }
 

@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Empresa {
+  id                      String          @id @default(uuid())
+  nombre                  String
+  tenant_api_key          String          @unique @default(uuid())
+  apollo_api_key          String?
+  millionverifier_api_key String?
+  logo_url                String?
+  key_active              Boolean         @default(true)
+
+  extensionUsers          ExtensionUser[]
+  adminUsers              AdminUser[]
+  consumos                Consumo[]
+
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+}
+
+model ExtensionUser {
+  id          String   @id // Google Auth ID
+  email       String
+  
+  empresa     Empresa  @relation(fields: [empresa_id], references: [id])
+  empresa_id  String
+
+  consumos    Consumo[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+}
+
+model AdminUser {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  role          Role     @default(ADMIN)
+  
+  // Optional: A superadmin might not belong to a specific empresa
+  empresa       Empresa? @relation(fields: [empresa_id], references: [id])
+  empresa_id    String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Consumo {
+  id                String   @id @default(uuid())
+  
+  usuario           ExtensionUser @relation(fields: [usuario_id], references: [id])
+  usuario_id        String
+  
+  empresa           Empresa  @relation(fields: [empresa_id], references: [id])
+  empresa_id        String
+  
+  creditos_apollo   Int      @default(0)
+  creditos_verifier Int      @default(0)
+  
+  fecha             DateTime @default(now())
+}

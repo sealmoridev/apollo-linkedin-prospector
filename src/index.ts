@@ -19,22 +19,23 @@ async function main() {
   }
 
   // Crear servicio de enriquecimiento
-  const enrichmentService = new EnrichmentService(apiKey);
+  const enrichmentService = new EnrichmentService();
 
   console.log('🚀 Apollo LinkedIn Prospector');
   console.log('================================\n');
 
   // Ejemplo 1: Enriquecer un solo perfil
   console.log('📋 Ejemplo 1: Enriquecer un perfil individual\n');
-  
+
   try {
     // Reemplaza esta URL con una URL real de LinkedIn que quieras probar
     const testUrl = 'https://www.linkedin.com/in/williamhgates';
-    
+
     console.log(`Enriqueciendo perfil: ${testUrl}\n`);
-    
-    const lead = await enrichmentService.enrichProfile(testUrl);
-    
+
+    // Ejecutar enriquecimiento usando el apiKey extraído de ENV
+    const lead = await enrichmentService.enrichProfile(apiKey, testUrl);
+
     console.log('\n📊 Resultado:');
     console.log('─────────────────────────────────────');
     console.log(`Nombre: ${lead.fullName}`);
@@ -50,30 +51,30 @@ async function main() {
 
   // Ejemplo 2: Enriquecer múltiples perfiles (batch)
   console.log('\n📋 Ejemplo 2: Enriquecer múltiples perfiles (batch)\n');
-  
+
   try {
     const testUrls = [
       'https://www.linkedin.com/in/williamhgates',
       'https://www.linkedin.com/in/satyanadella',
       'https://www.linkedin.com/in/invalid-profile-xyz-123' // Este fallará
     ];
-    
-    const result = await enrichmentService.enrichProfiles(testUrls);
-    
+
+    const result = await enrichmentService.enrichProfiles(apiKey, testUrls);
+
     console.log('\n📊 Resumen del Batch:');
     console.log('─────────────────────────────────────');
     console.log(`✓ Exitosos: ${result.successful.length}`);
     console.log(`✗ Fallidos: ${result.failed.length}`);
     console.log(`Total créditos: ${result.totalCreditsConsumed}`);
     console.log('─────────────────────────────────────\n');
-    
+
     if (result.successful.length > 0) {
       console.log('Perfiles enriquecidos exitosamente:');
       result.successful.forEach((lead, i) => {
         console.log(`  ${i + 1}. ${lead.fullName} - ${lead.title} @ ${lead.company}`);
       });
     }
-    
+
     if (result.failed.length > 0) {
       console.log('\nPerfiles que fallaron:');
       result.failed.forEach((fail, i) => {

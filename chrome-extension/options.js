@@ -4,6 +4,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const saveApiBtn = document.getElementById('saveApiBtn');
     const apiMessage = document.getElementById('apiMessage');
 
+    // Clave de Empresa
+    const tenantApiKeyInput = document.getElementById('tenantApiKey');
+    const sdrEmailInput = document.getElementById('sdrEmail');
+    const saveTenantBtn = document.getElementById('saveTenantBtn');
+    const tenantMessage = document.getElementById('tenantMessage');
+    const tenantKeyStatus = document.getElementById('tenantKeyStatus');
+    const toggleTenantKey = document.getElementById('toggleTenantKey');
+    const tenantKeyEyeIcon = document.getElementById('tenantKeyEyeIcon');
+
     const authStatusText = document.getElementById('authStatusText');
     const authBtn = document.getElementById('authBtn');
 
@@ -51,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Cargar config inicial
     await getUserId();
-    const config = await chrome.storage.sync.get(['apiUrl', 'defaultSheetId', 'defaultSheetName']);
+    const config = await chrome.storage.sync.get(['apiUrl', 'defaultSheetId', 'defaultSheetName', 'tenantApiKey', 'sdrEmail']);
 
     if (config.apiUrl) {
         currentApiUrl = config.apiUrl;
@@ -62,6 +71,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         selectedSheetId = config.defaultSheetId;
         selectedSheetName = config.defaultSheetName || 'Documento Guardado';
     }
+
+    // Clave de Empresa — cargar valores guardados
+    if (config.tenantApiKey) {
+        tenantApiKeyInput.value = config.tenantApiKey;
+        tenantKeyStatus.innerHTML = '<span style="color:#16a34a;">●</span> Configurada';
+    } else {
+        tenantKeyStatus.innerHTML = '<span style="color:#ef4444;">●</span> No configurada';
+    }
+    if (config.sdrEmail) {
+        sdrEmailInput.value = config.sdrEmail;
+    }
+
+    // Toggle visibilidad de la clave
+    toggleTenantKey.addEventListener('click', () => {
+        const isHidden = tenantApiKeyInput.type === 'password';
+        tenantApiKeyInput.type = isHidden ? 'text' : 'password';
+        tenantKeyEyeIcon.innerHTML = isHidden
+            ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
+            : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+    });
+
+    // Guardar Clave de Empresa
+    saveTenantBtn.addEventListener('click', () => {
+        const keyToSave = tenantApiKeyInput.value.trim();
+        const emailToSave = sdrEmailInput.value.trim();
+        if (!keyToSave) {
+            showMessage(tenantMessage, 'La API Key no puede estar vacía.', true);
+            return;
+        }
+        chrome.storage.sync.set({ tenantApiKey: keyToSave, sdrEmail: emailToSave }, () => {
+            tenantKeyStatus.innerHTML = '<span style="color:#16a34a;">●</span> Configurada';
+            showMessage(tenantMessage, '<div style="display:flex;align-items:center;gap:6px;"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Clave guardada correctamente.</div>');
+        });
+    });
 
     // --- SECCIÓN 1: GUARDAR API URL ---
     saveApiBtn.addEventListener('click', () => {

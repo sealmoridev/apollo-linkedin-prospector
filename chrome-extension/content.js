@@ -184,6 +184,8 @@ const initializeWidgetLogic = async () => {
     // Estado Interno
     let currentLinkedinUrl = window.location.href;
     let apiUrl = 'http://localhost:3000';
+    let tenantApiKey = '';
+    let sdrEmail = '';
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
     let hasExtractedCurrentProfile = false; // Bandera para State 3
@@ -479,10 +481,22 @@ const initializeWidgetLogic = async () => {
             // Desactiva el botón de login durante la carga para evitar spam
             loginBtn.style.display = 'none';
 
-            const result = await chrome.storage.sync.get(['apiUrl']);
+            const result = await chrome.storage.sync.get(['apiUrl', 'tenantApiKey', 'sdrEmail']);
             if (result.apiUrl) {
-                // Limpiar slash final si el usuario lo puso por error
                 apiUrl = result.apiUrl.replace(/\/$/, "");
+            }
+            if (result.tenantApiKey) tenantApiKey = result.tenantApiKey;
+            if (result.sdrEmail) sdrEmail = result.sdrEmail;
+
+            // Verificar que la clave de empresa esté configurada
+            if (!tenantApiKey) {
+                authStatusText.innerHTML = '<svg class="indicator" style="width:14px;height:14px;margin-right:4px;vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Falta la Clave de Empresa';
+                authStatusText.className = 'ap-auth-status disconnected';
+                loginBtn.innerHTML = '⚙️ Configurar Clave en Opciones';
+                loginBtn.style.display = 'flex';
+                loginBtn.onclick = () => chrome.runtime.openOptionsPage();
+                extractBtn.disabled = true;
+                return;
             }
 
             const response = await fetch(`${apiUrl}/api/auth/status?userId=${userId}`);
@@ -508,7 +522,7 @@ const initializeWidgetLogic = async () => {
 
                     loginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
                     loginBtn.style.display = 'flex';
-                    loginBtn.onclick = () => chrome.runtime.sendMessage({ action: "openOptionsPage" });
+                    loginBtn.onclick = () => chrome.runtime.openOptionsPage();
 
                     if (!currentLinkedinUrl.includes('linkedin.com/in/')) {
                         extractBtn.disabled = true;
@@ -586,7 +600,7 @@ const initializeWidgetLogic = async () => {
     });
 
     optionsLink.addEventListener('click', () => {
-        chrome.runtime.sendMessage({ action: "openOptionsPage" });
+        chrome.runtime.openOptionsPage();
     });
 
 
@@ -604,7 +618,12 @@ const initializeWidgetLogic = async () => {
         try {
             const response = await fetch(`${apiUrl}/api/enrich`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': tenantApiKey,
+                    'x-google-id': userId,
+                    'x-google-email': sdrEmail
+                },
                 body: JSON.stringify({
                     linkedinUrl: currentLinkedinUrl,
                     includePhone: includePhoneToggle.checked,
@@ -667,7 +686,12 @@ const initializeWidgetLogic = async () => {
             try {
                 const response = await fetch(`${apiUrl}/api/verify-email`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': tenantApiKey,
+                        'x-google-id': userId,
+                        'x-google-email': sdrEmail
+                    },
                     body: JSON.stringify({ email: emailToVerify })
                 });
 

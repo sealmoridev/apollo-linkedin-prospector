@@ -1,11 +1,13 @@
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
+import path from 'path';
 import { WebhookServer } from './services/webhook-server';
 import { EnrichmentService } from './services/enrichment-service';
 import { SheetsService } from './services/sheets-service';
 import { tokenStorage } from './services/token-storage';
 import { validateLinkedInUrl } from './utils/linkedin-validator';
 import { millionVerifyService } from './services/million-verify-service';
+import adminRoutes from './routes/admin';
 import cors from 'cors';
 
 dotenv.config();
@@ -23,8 +25,17 @@ if (!APOLLO_API_KEY) {
   process.exit(1);
 }
 
+import { tenantAuthMiddleware } from './middlewares/tenant-auth';
+import { prisma } from './lib/prisma';
+
 // Crear app Express
 const app = express();
+
+app.use((req, res, next) => {
+  console.log(`[Global] ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cors()); // Importante para que la extensión de Chrome pueda llamar al API
 app.use(express.json());
 
@@ -53,7 +64,7 @@ console.log(`🔗 Webhook URL: ${webhookUrl}\n`);
 const webhookServer = new WebhookServer(PORT, webhookUrl);
 
 // Crear servicio de enriquecimiento
-const enrichmentService = new EnrichmentService(APOLLO_API_KEY, webhookServer);
+const enrichmentService = new EnrichmentService(webhookServer);
 
 // Crear servicio de Google Sheets
 const sheetsService = new SheetsService();
@@ -71,8 +82,18 @@ webhookServer.on('data', async (data) => {
 });
 
 // ============================================================================
-// RUTAS DE LA API
+// RUTAS DE LA API Y BACKOFFICE
 // ============================================================================
+
+// Rutas del Backoffice (Admin)
+app.use('/api/admin', adminRoutes);
+
+// Servir SPA del backoffice
+const backofficeDir = path.join(__dirname, '..', 'backoffice', 'dist');
+app.use('/admin', express.static(backofficeDir));
+app.get('/admin/*', (_req: Request, res: Response) => {
+  res.sendFile(path.join(backofficeDir, 'index.html'));
+});
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
@@ -104,9 +125,15 @@ app.get('/', (req: Request, res: Response) => {
 // ============================================================================
 
 // Enriquecer un perfil individual
-app.post('/api/enrich', async (req: Request, res: Response) => {
+app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const { linkedinUrl, includePhone = false, userId = 'default' } = req.body;
+    const { linkedinUrl, includePhone = false } = req.body;
+    const tenant = req.tenant!;
+    const user = req.extensionUser!;
+
+    if (!tenant.apollo_api_key) {
+      return res.status(403).json({ error: 'Configuración Apollo API Key faltante para el tenant.' });
+    }
 
     if (!linkedinUrl) {
       return res.status(400).json({
@@ -127,16 +154,26 @@ app.post('/api/enrich', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[API] Enriching profile: ${linkedinUrl} (phone: ${includePhone})`);
+    console.log(`[API] Enriching profile: ${linkedinUrl} (phone: ${includePhone}) by user ${user.id}`);
 
-    // Enriquecer perfil
+    // Enriquecer perfil usando el Apollo API Key del tenant
     const lead = await enrichmentService.enrichProfile(
+      tenant.apollo_api_key,
       linkedinUrl,
-      undefined,
+      user.id,
       includePhone
     );
 
-    // Ya no guardamos aquí. Solo devolvemos los datos para "Pre-visualización"
+    // Guardar registro de consumo
+    await prisma.consumo.create({
+      data: {
+        usuario_id: user.id,
+        empresa_id: tenant.id,
+        creditos_apollo: lead.creditsConsumed || 1,
+        creditos_verifier: 0
+      }
+    });
+
     res.json({
       success: true,
       data: lead
@@ -152,9 +189,15 @@ app.post('/api/enrich', async (req: Request, res: Response) => {
 });
 
 // Enriquecer múltiples perfiles (batch)
-app.post('/api/enrich/batch', async (req: Request, res: Response) => {
+app.post('/api/enrich/batch', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { linkedinUrls, includePhone = false } = req.body;
+    const tenant = req.tenant!;
+    const user = req.extensionUser!;
+
+    if (!tenant.apollo_api_key) {
+      return res.status(403).json({ error: 'Configuración Apollo API Key faltante para el tenant.' });
+    }
 
     if (!linkedinUrls || !Array.isArray(linkedinUrls) || linkedinUrls.length === 0) {
       return res.status(400).json({
@@ -169,14 +212,27 @@ app.post('/api/enrich/batch', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[API] Batch enriching ${linkedinUrls.length} profiles (phone: ${includePhone})`);
+    console.log(`[API] Batch enriching ${linkedinUrls.length} profiles (phone: ${includePhone}) by user ${user.id}`);
 
-    // Enriquecer batch
+    // Enriquecer batch con el API Key del tenant
     const result = await enrichmentService.enrichProfiles(
+      tenant.apollo_api_key,
       linkedinUrls,
-      undefined,
+      user.id,
       includePhone
     );
+
+    if (result.totalCreditsConsumed > 0) {
+      // Guardar registro de consumo
+      await prisma.consumo.create({
+        data: {
+          usuario_id: user.id,
+          empresa_id: tenant.id,
+          creditos_apollo: result.totalCreditsConsumed,
+          creditos_verifier: 0
+        }
+      });
+    }
 
     res.json({
       success: true,
@@ -193,15 +249,34 @@ app.post('/api/enrich/batch', async (req: Request, res: Response) => {
 });
 
 // Validar correo manualmente (MillionVerify)
-app.post('/api/verify-email', async (req: Request, res: Response) => {
+app.post('/api/verify-email', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
+    const tenant = req.tenant!;
+    const user = req.extensionUser!;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    const verificationResult = await millionVerifyService.verifyEmail(email);
+    if (!tenant.millionverifier_api_key) {
+      return res.status(403).json({ error: 'Configuración MillionVerifier API Key faltante para el tenant.' });
+    }
+
+    const verificationResult = await millionVerifyService.verifyEmail(tenant.millionverifier_api_key, email);
+
+    // Solo logueamos consumo si se conectó a la API
+    if (verificationResult.status !== 'error') {
+      await prisma.consumo.create({
+        data: {
+          usuario_id: user.id,
+          empresa_id: tenant.id,
+          creditos_apollo: 0,
+          creditos_verifier: 1
+        }
+      });
+    }
+
     res.json(verificationResult);
 
   } catch (error) {

@@ -27,13 +27,13 @@ async function main() {
     process.exit(1);
   }
 
-  const service = new EnrichmentService(apiKey);
-
-  console.log('🚀 Enriqueciendo perfil de LinkedIn...\n');
-  console.log(`URL: ${linkedinUrl}\n`);
+  const service = new EnrichmentService();
 
   try {
-    const lead = await service.enrichProfile(linkedinUrl);
+    console.log(`Buscando datos para: ${linkedinUrl}...`);
+    console.log('---');
+
+    const lead = await service.enrichProfile(apiKey, linkedinUrl);
 
     console.log('\n✅ ¡Perfil enriquecido exitosamente!\n');
     console.log('📊 Datos extraídos:');
