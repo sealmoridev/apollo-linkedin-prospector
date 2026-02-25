@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumos } from '../lib/api';
-import type { EmpresaDetail, ExtensionUser, Consumo } from '../lib/api';
+import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumos, getConsumoHistorial, getConsumoSheetNames } from '../lib/api';
+import type { EmpresaDetail, ExtensionUser, Consumo, LeadData } from '../lib/api';
 import { useActiveEmpresa } from '../ActiveEmpresaContext';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
@@ -9,11 +9,14 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
+import { Separator } from '../components/ui/separator';
 import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
     CartesianGrid, Tooltip
 } from 'recharts';
-import { Users, Zap, CheckCircle, Activity, RefreshCw } from 'lucide-react';
+import { Users, Zap, CheckCircle, Activity, RefreshCw, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -79,6 +82,17 @@ export default function MiEmpresa() {
     const [loadingConsumos, setLoadingConsumos] = useState(false);
     const [refreshingUsuarios, setRefreshingUsuarios] = useState(false);
 
+    // Historial de capturas
+    const [historialLeads, setHistorialLeads] = useState<Consumo[]>([]);
+    const [historialTotal, setHistorialTotal] = useState(0);
+    const [historialPage, setHistorialPage] = useState(1);
+    const [historialTotalPages, setHistorialTotalPages] = useState(1);
+    const [historialLoading, setHistorialLoading] = useState(false);
+    const [selectedLead, setSelectedLead] = useState<LeadData | null>(null);
+    const [sheetPanelOpen, setSheetPanelOpen] = useState(false);
+    const [sheetNames, setSheetNames] = useState<string[]>([]);
+    const [sheetNameFilter, setSheetNameFilter] = useState<string>('');
+
     // Date range
     const [preset, setPreset] = useState<RangePreset>('7d');
     const [customDesde, setCustomDesde] = useState(toISO(new Date()));
@@ -122,6 +136,34 @@ export default function MiEmpresa() {
             .catch(() => toast.error('Error al cargar consumos'))
             .finally(() => setLoadingConsumos(false));
     }, [empresa, appliedRange]);
+
+    // Load sheet names for historial filter
+    useEffect(() => {
+        if (!empresa) return;
+        getConsumoSheetNames(empresa.id)
+            .then(setSheetNames)
+            .catch(() => { /* silently ignore */ });
+    }, [empresa]);
+
+    // Load historial leads
+    useEffect(() => {
+        if (!empresa) return;
+        setHistorialLoading(true);
+        getConsumoHistorial({
+            empresa_id: empresa.id,
+            only_leads: true,
+            sheet_name: sheetNameFilter || undefined,
+            page: historialPage,
+            limit: 20
+        })
+            .then(result => {
+                setHistorialLeads(result.data);
+                setHistorialTotal(result.total);
+                setHistorialTotalPages(result.totalPages);
+            })
+            .catch(() => toast.error('Error al cargar historial de capturas'))
+            .finally(() => setHistorialLoading(false));
+    }, [empresa, sheetNameFilter, historialPage]);
 
     // Apply a preset
     const applyPreset = (p: Exclude<RangePreset, 'custom'>) => {
@@ -183,6 +225,24 @@ export default function MiEmpresa() {
         });
         return Array.from(byUser.values()).sort((a, b) => b.extracciones - a.extracciones);
     }, [consumos]);
+
+    const handleSheetNameFilterChange = (val: string) => {
+        setSheetNameFilter(val === '__all__' ? '' : val);
+        setHistorialPage(1);
+    };
+
+    const openLeadPanel = (lead: LeadData) => {
+        setSelectedLead(lead);
+        setSheetPanelOpen(true);
+    };
+
+    const emailStatusBadge = (status: string | null) => {
+        if (!status) return <Badge variant="outline">Sin verificar</Badge>;
+        const statusMap: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
+        const label = statusMap[status] || status;
+        const variant = status === 'valid' ? 'default' : status === 'invalid' ? 'destructive' : 'secondary';
+        return <Badge variant={variant as any}>{label}</Badge>;
+    };
 
     // ─ Render ─────────────────────────────────────────────────────────────────
 
@@ -452,6 +512,237 @@ export default function MiEmpresa() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Historial de Capturas */}
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                    <div>
+                        <CardTitle>Historial de Capturas</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">Leads guardados en Google Sheets ({historialTotal})</p>
+                    </div>
+                    {sheetNames.length > 0 && (
+                        <Select value={sheetNameFilter || '__all__'} onValueChange={handleSheetNameFilterChange}>
+                            <SelectTrigger className="w-48 h-8 text-sm">
+                                <SelectValue placeholder="Todos los sheets" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">Todos los sheets</SelectItem>
+                                {sheetNames.map(name => (
+                                    <SelectItem key={name} value={name}>{name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                </CardHeader>
+                <CardContent>
+                    {historialLoading ? (
+                        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground animate-pulse">Cargando...</div>
+                    ) : historialLeads.length === 0 ? (
+                        <p className="text-center text-sm text-muted-foreground py-8">
+                            No hay capturas registradas aún.
+                        </p>
+                    ) : (
+                        <>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Fecha</TableHead>
+                                        <TableHead>Nombre</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Título</TableHead>
+                                        <TableHead>Empresa</TableHead>
+                                        <TableHead>Sheet</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {historialLeads.map(c => {
+                                        const ld = c.lead_data!;
+                                        return (
+                                            <TableRow
+                                                key={c.id}
+                                                className="cursor-pointer hover:bg-muted/50"
+                                                onClick={() => openLeadPanel(ld)}
+                                            >
+                                                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                                    {new Date(c.fecha).toLocaleDateString('es-CL')}
+                                                </TableCell>
+                                                <TableCell className="font-medium text-sm">
+                                                    {ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || '—'}
+                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">
+                                                    {ld.primary_email || '—'}
+                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">
+                                                    {ld.title || '—'}
+                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">
+                                                    {ld.company_name || '—'}
+                                                </TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">
+                                                    {c.sheet_name || '—'}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+
+                            {/* Paginación */}
+                            {historialTotalPages > 1 && (
+                                <div className="flex items-center justify-between mt-4">
+                                    <span className="text-xs text-muted-foreground">
+                                        Página {historialPage} de {historialTotalPages}
+                                    </span>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            variant="outline" size="sm"
+                                            disabled={historialPage <= 1}
+                                            onClick={() => setHistorialPage(p => p - 1)}
+                                        >
+                                            <ChevronLeft className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                            variant="outline" size="sm"
+                                            disabled={historialPage >= historialTotalPages}
+                                            onClick={() => setHistorialPage(p => p + 1)}
+                                        >
+                                            <ChevronRight className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Panel lateral de detalle del lead */}
+            <Sheet open={sheetPanelOpen} onOpenChange={setSheetPanelOpen}>
+                <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
+                    {selectedLead && (
+                        <>
+                            <SheetHeader>
+                                <SheetTitle>{selectedLead.full_name || `${selectedLead.first_name || ''} ${selectedLead.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
+                                <SheetDescription className="flex items-center gap-2 flex-wrap">
+                                    {selectedLead.title && <span>{selectedLead.title}</span>}
+                                    {selectedLead.company_name && <span>· {selectedLead.company_name}</span>}
+                                </SheetDescription>
+                                <div className="mt-1">{emailStatusBadge(selectedLead.email_status)}</div>
+                            </SheetHeader>
+
+                            <div className="px-6 pb-6 space-y-4">
+                                <Separator />
+
+                                {/* Contacto */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
+                                    <dl className="space-y-1.5 text-sm">
+                                        {selectedLead.primary_email && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Email principal</dt>
+                                                <dd className="font-medium break-all">{selectedLead.primary_email}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.personal_email && selectedLead.personal_email !== selectedLead.primary_email && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Email personal</dt>
+                                                <dd className="break-all">{selectedLead.personal_email}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.phone_number && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt>
+                                                <dd>{selectedLead.phone_number}</dd>
+                                            </div>
+                                        )}
+                                    </dl>
+                                </div>
+
+                                <Separator />
+
+                                {/* Empresa */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
+                                    <dl className="space-y-1.5 text-sm">
+                                        {selectedLead.company_name && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Nombre</dt>
+                                                <dd className="font-medium">{selectedLead.company_name}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.company_domain && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Dominio</dt>
+                                                <dd>{selectedLead.company_domain}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.industry && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Industria</dt>
+                                                <dd>{selectedLead.industry}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.location && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt>
+                                                <dd>{selectedLead.location}</dd>
+                                            </div>
+                                        )}
+                                    </dl>
+                                </div>
+
+                                {selectedLead.linkedin_url && (
+                                    <>
+                                        <Separator />
+                                        <a
+                                            href={selectedLead.linkedin_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                                        >
+                                            <ExternalLink className="h-3.5 w-3.5" />
+                                            Ver perfil LinkedIn
+                                        </a>
+                                    </>
+                                )}
+
+                                <Separator />
+
+                                {/* SDR */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
+                                    <dl className="space-y-1.5 text-sm">
+                                        {selectedLead.sdr_name && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Nombre</dt>
+                                                <dd className="font-medium">{selectedLead.sdr_name}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.sdr_mail && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Email</dt>
+                                                <dd className="break-all">{selectedLead.sdr_mail}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.sdr_id && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">ID</dt>
+                                                <dd className="text-muted-foreground text-xs">{selectedLead.sdr_id}</dd>
+                                            </div>
+                                        )}
+                                        {selectedLead.created_at && (
+                                            <div className="flex gap-2">
+                                                <dt className="text-muted-foreground w-28 shrink-0">Capturado</dt>
+                                                <dd>{new Date(selectedLead.created_at).toLocaleString('es-CL')}</dd>
+                                            </div>
+                                        )}
+                                    </dl>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }

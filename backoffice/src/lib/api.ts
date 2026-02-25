@@ -37,6 +37,26 @@ export interface ConsumoResumen {
     total_busquedas: number;
 }
 
+export interface LeadData {
+    created_at: string | null;
+    full_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    title: string | null;
+    primary_email: string | null;
+    personal_email: string | null;
+    phone_number: string | null;
+    company_name: string | null;
+    company_domain: string | null;
+    industry: string | null;
+    location: string | null;
+    linkedin_url: string | null;
+    email_status: string | null;
+    sdr_id: string | null;
+    sdr_name: string | null;
+    sdr_mail: string | null;
+}
+
 export interface Consumo {
     id: string;
     usuario_id: string;
@@ -44,6 +64,9 @@ export interface Consumo {
     creditos_apollo: number;
     creditos_verifier: number;
     fecha: string;
+    lead_data: LeadData | null;
+    sheet_id: string | null;
+    sheet_name: string | null;
     usuario: { email: string; id: string };
     empresa: { nombre: string };
 }
@@ -223,6 +246,8 @@ export const getConsumoHistorial = async (params: {
     usuario_id?: string;
     page?: number;
     limit?: number;
+    sheet_name?: string;
+    only_leads?: boolean;
 }): Promise<ConsumoHistorialResult> => {
     const qs = new URLSearchParams();
     if (params.empresa_id) qs.set('empresa_id', params.empresa_id);
@@ -231,11 +256,25 @@ export const getConsumoHistorial = async (params: {
     if (params.usuario_id) qs.set('usuario_id', params.usuario_id);
     if (params.page) qs.set('page', String(params.page));
     if (params.limit) qs.set('limit', String(params.limit));
+    if (params.sheet_name) qs.set('sheet_name', params.sheet_name);
+    if (params.only_leads) qs.set('only_leads', 'true');
     const url = `${API_URL}/admin/consumos/historial?${qs.toString()}`;
     const res = await fetch(url, { headers: getAuthHeaders() });
     if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Error al obtener historial');
+    }
+    return res.json();
+};
+
+export const getConsumoSheetNames = async (empresa_id?: string): Promise<string[]> => {
+    const qs = new URLSearchParams();
+    if (empresa_id) qs.set('empresa_id', empresa_id);
+    const url = `${API_URL}/admin/consumos/sheet-names${qs.toString() ? '?' + qs.toString() : ''}`;
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al obtener sheet names');
     }
     return res.json();
 };

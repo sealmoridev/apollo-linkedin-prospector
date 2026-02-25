@@ -176,12 +176,12 @@ router.get('/consumos', requireAdmin, async (req: Request, res: Response) => {
 /**
  * Historial paginado de consumos (para la página de log).
  * ADMIN: solo su empresa. SUPERADMIN: puede filtrar por empresa_id.
- * Params: empresa_id?, desde?, hasta?, usuario_id?, page?, limit?
+ * Params: empresa_id?, desde?, hasta?, usuario_id?, page?, limit?, sheet_name?, only_leads?
  */
 router.get('/consumos/historial', requireAdmin, async (req: Request, res: Response) => {
     try {
         const { role, empresa_id } = req.adminUser!;
-        const { empresa_id: qEmpresaId, desde, hasta, usuario_id, page = '1', limit = '50' } = req.query;
+        const { empresa_id: qEmpresaId, desde, hasta, usuario_id, page = '1', limit = '50', sheet_name, only_leads } = req.query;
 
         const filter: any = {};
         if (role !== 'SUPERADMIN') {
@@ -201,6 +201,8 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
         }
 
         if (usuario_id) filter.usuario_id = usuario_id as string;
+        if (sheet_name) filter.sheet_name = sheet_name as string;
+        if (only_leads === 'true') filter.lead_data = { not: null };
 
         const pageNum = Math.max(1, parseInt(page as string));
         const limitNum = Math.min(100, Math.max(1, parseInt(limit as string)));
@@ -230,6 +232,37 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
     } catch (error) {
         console.error('[Admin API] Historial fetch error:', error);
         res.status(500).json({ error: 'No se pudo obtener el historial' });
+    }
+});
+
+/**
+ * Sheet names únicos del tenant (para filtro dropdown).
+ * ADMIN: solo su empresa. SUPERADMIN: puede filtrar por empresa_id.
+ */
+router.get('/consumos/sheet-names', requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { role, empresa_id } = req.adminUser!;
+        const { empresa_id: qEmpresaId } = req.query;
+
+        const filter: any = { sheet_name: { not: null }, lead_data: { not: null } };
+        if (role !== 'SUPERADMIN') {
+            filter.empresa_id = empresa_id;
+        } else if (qEmpresaId) {
+            filter.empresa_id = qEmpresaId as string;
+        }
+
+        const rows = await prisma.consumo.findMany({
+            where: filter,
+            select: { sheet_name: true },
+            distinct: ['sheet_name'],
+            orderBy: { sheet_name: 'asc' }
+        });
+
+        const names = rows.map(r => r.sheet_name).filter(Boolean) as string[];
+        res.json(names);
+    } catch (error) {
+        console.error('[Admin API] Sheet names fetch error:', error);
+        res.status(500).json({ error: 'No se pudo obtener los nombres de sheets' });
     }
 });
 

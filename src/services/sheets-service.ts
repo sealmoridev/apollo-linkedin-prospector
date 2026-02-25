@@ -124,14 +124,14 @@ export class SheetsService {
             // 2. Darle formato a los Headers (fila 1)
             await sheets.spreadsheets.values.update({
                 spreadsheetId,
-                range: 'Leads Base!A1:J1',
+                range: 'Leads Base!A1:R1',
                 valueInputOption: 'USER_ENTERED',
                 requestBody: {
-                    values: [['Nombre', 'Emails', 'Título', 'Empresa', 'Locación', 'Teléfonos', 'URL LinkedIn', 'Fecha Captura', 'Estado del Email', 'Notas / Observaciones']]
+                    values: [['created_at', 'full_name', 'first_name', 'last_name', 'title', 'primary_email', 'personal_email', 'phone_number', 'company_name', 'company_domain', 'industry', 'location', 'linkedin_url', 'email_status', 'notes', 'sdr_id', 'sdr_name', 'sdr_mail']]
                 }
             });
 
-            // Poner los encabezados en negrita (opcional, pero útil)
+            // Poner los encabezados en negrita
             await sheets.spreadsheets.batchUpdate({
                 spreadsheetId,
                 requestBody: {
@@ -143,7 +143,7 @@ export class SheetsService {
                                     startRowIndex: 0,
                                     endRowIndex: 1,
                                     startColumnIndex: 0,
-                                    endColumnIndex: 10
+                                    endColumnIndex: 18
                                 },
                                 cell: {
                                     userEnteredFormat: {
@@ -205,7 +205,7 @@ export class SheetsService {
     /**
      * Guarda un perfil en el Google Sheet específico
      */
-    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string): Promise<{ success: boolean; spreadsheetId?: string }> {
+    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string, sdrInfo?: { id: string; nombre: string | null; email: string }): Promise<{ success: boolean; spreadsheetId?: string }> {
         try {
             // Verificar si se solicitó crear una nueva hoja
             if (spreadsheetId === 'NEW_SHEET') {
@@ -219,37 +219,42 @@ export class SheetsService {
             const sheets = this.getUserSheetsClient(userId);
 
             const primaryEmail = (lead as any).primaryEmail || [lead.email, lead.personalEmail].filter(Boolean)[0] || '';
-            const secondaryEmails = (lead as any).secondaryEmails || '';
             const phones = lead.phoneNumber || 'Pendiente Webhook';
 
-            let emailStatusVal = (lead as any).emailStatus || 'Sin verificar';
-            if (emailStatusVal !== 'Sin verificar') {
-                const statusMap: Record<string, string> = {
-                    'valid': 'Válido',
-                    'invalid': 'Inválido',
-                    'catch_all': 'Catch-All'
-                };
-                emailStatusVal = statusMap[emailStatusVal] || 'Error/Desc';
-            }
+            const statusMap: Record<string, string> = {
+                'valid': 'Válido',
+                'invalid': 'Inválido',
+                'catch_all': 'Catch-All'
+            };
+            const rawStatus = (lead as any).emailStatus;
+            const emailStatusVal = rawStatus ? (statusMap[rawStatus] || 'Error/Desc') : 'Sin verificar';
 
             const values = [
                 [
-                    lead.fullName || lead.firstName || 'Sin nombre',
-                    primaryEmail || 'Sin email',
-                    lead.title || 'Sin título',
-                    lead.company || 'Sin empresa',
-                    lead.location || 'Sin locación',
-                    phones,
-                    lead.linkedinUrl || '',
-                    new Date().toISOString(),
-                    emailStatusVal,
-                    secondaryEmails
+                    new Date().toISOString(),             // A: created_at
+                    lead.fullName || '',                  // B: full_name
+                    lead.firstName || '',                 // C: first_name
+                    lead.lastName || '',                  // D: last_name
+                    lead.title || '',                     // E: title
+                    primaryEmail,                         // F: primary_email
+                    lead.personalEmail || '',             // G: personal_email
+                    phones,                               // H: phone_number
+                    lead.company || '',                   // I: company_name
+                    lead.companyDomain || '',             // J: company_domain
+                    lead.industry || '',                  // K: industry
+                    lead.location || '',                  // L: location
+                    lead.linkedinUrl || '',               // M: linkedin_url
+                    emailStatusVal,                       // N: email_status
+                    '',                                   // O: notes (SDR fills manually)
+                    sdrInfo?.id || '',                    // P: sdr_id
+                    sdrInfo?.nombre || '',                // Q: sdr_name
+                    sdrInfo?.email || ''                  // R: sdr_mail
                 ]
             ];
 
             await sheets.spreadsheets.values.append({
                 spreadsheetId: spreadsheetId,
-                range: 'Leads Base!A:J',
+                range: 'Leads Base!A:R',
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'OVERWRITE',
                 requestBody: {
@@ -285,7 +290,7 @@ export class SheetsService {
 
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId: spreadsheetId,
-                range: 'Leads Base!A:H',
+                range: 'Leads Base!A:M',
             });
 
             const rows = response.data.values;
@@ -293,7 +298,7 @@ export class SheetsService {
 
             let rowIndex = -1;
             for (let i = 0; i < rows.length; i++) {
-                const rowUrl = rows[i][6]; // G column -> LinkedIn URL
+                const rowUrl = rows[i][12]; // M column (index 12) -> linkedin_url
                 if (rowUrl && linkedinUrl && rowUrl.includes(linkedinUrl.replace(/\/$/, ''))) {
                     rowIndex = i;
                     break;
@@ -305,7 +310,7 @@ export class SheetsService {
             }
 
             const rowNumber = rowIndex + 1;
-            const rangeToUpdate = `Leads Base!F${rowNumber}`; // Columna F = 'Teléfonos'
+            const rangeToUpdate = `Leads Base!H${rowNumber}`; // Columna H = 'phone_number'
 
             await sheets.spreadsheets.values.update({
                 spreadsheetId: spreadsheetId,

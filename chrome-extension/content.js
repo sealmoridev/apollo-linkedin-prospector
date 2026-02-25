@@ -11,6 +11,7 @@ const getUserId = async () => {
 // URLs dinámicos de las imágenes
 const logo16 = chrome.runtime.getURL('assets/icon16.png');
 const logo48 = chrome.runtime.getURL('assets/icon48.png');
+const logoMRP = chrome.runtime.getURL('assets/mrprospect-logo.png');
 
 // Interfaz HTML del Widget
 const widgetHTML = `
@@ -88,26 +89,27 @@ const widgetHTML = `
 
           <!-- Fila sheet -->
           <div class="ap-pc-sheet-row" id="apPcSheetRow">
-            <!-- Icono Google Sheets pequeño -->
-            <svg width="20" height="26" viewBox="0 0 20 26" fill="none" style="flex-shrink:0;">
-              <path d="M12 0H2C0.9 0 0 0.9 0 2v22c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8L12 0z" fill="#34A853"/>
-              <path d="M12 0v8h8L12 0z" fill="#188038"/>
-              <rect x="3" y="11" width="14" height="2" rx="0.8" fill="white"/>
-              <rect x="3" y="15" width="14" height="2" rx="0.8" fill="white"/>
-              <rect x="3" y="19" width="9" height="2" rx="0.8" fill="white"/>
-            </svg>
             <div class="ap-pc-sheet-info">
-              <div id="apPcSheetName" class="ap-pc-sheet-name-big">—</div>
-              <div id="apPcSheetHint" class="ap-pc-sheet-hint" style="display:none;">Selecciona en Opciones →</div>
+              <div class="ap-pc-sheet-top-line">
+                <div id="apPcSheetName" class="ap-pc-sheet-name-big">—</div>
+                <a id="apPcSheetLink" href="#" target="_blank" class="ap-pc-sheet-link" style="display:none;" title="Abrir Google Sheets">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                </a>
+              </div>
+              <div id="apPcSheetLabel" class="ap-pc-sheet-label" style="display:none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <span>Sheet Sincronizada</span>
+              </div>
+              <div id="apPcSheetHint" class="ap-pc-sheet-hint" style="display:none;">Falta seleccionar tu Base Google Sheet · <button type="button" id="apPcHintOptionsBtn" class="ap-pc-hint-link">Ir a Opciones</button></div>
             </div>
-            <a id="apPcSheetLink" href="#" target="_blank" class="ap-pc-sheet-link" style="display:none;" title="Abrir Google Sheets">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-            </a>
           </div>
 
         </div>
 
         <!-- Estado desconectado / cargando -->
+        <div class="ap-auth-disconnect-wrap">
         <div id="apAuthStatusText" class="ap-auth-status disconnected">Cargando estado...</div>
         <button id="apLoginBtn" class="ap-btn-google">
           <svg width="18" height="18" viewBox="0 0 48 48" style="margin-right: 5px;">
@@ -119,6 +121,7 @@ const widgetHTML = `
           </svg>
           Conectar con Google
         </button>
+        </div>
       </div>
 
       <!-- PASO 1: Extracción -->
@@ -209,8 +212,8 @@ const widgetHTML = `
     </div>
 
     <div class="ap-footer">
-      <div style="display:flex;align-items:center;gap:5px;">
-        <img src="${logo16}" style="width:13px;height:13px;opacity:0.55;" alt="">
+      <div class="ap-footer-brand">
+        <img src="${logo48}" class="ap-footer-icon" alt="">
         <span>MR Prospect</span>
       </div>
       <a id="apOptionsLink" class="ap-options-link">Opciones</a>
@@ -239,6 +242,7 @@ const initializeWidgetLogic = async () => {
     const authSection = document.getElementById('apAuthSection');
     const loginBtn = document.getElementById('apLoginBtn');
     const authStatusText = document.getElementById('apAuthStatusText');
+    const disconnectWrap = document.querySelector('.ap-auth-disconnect-wrap');
 
     const extractSection = document.getElementById('apExtractSection');
     const previewSection = document.getElementById('apPreviewSection');
@@ -258,6 +262,7 @@ const initializeWidgetLogic = async () => {
     const cancelBtn = document.getElementById('apCancelBtn');
 
     const resultDiv = document.getElementById('apResultDiv');
+
     const optionsLink = document.getElementById('apOptionsLink');
 
     // Header user elements
@@ -274,8 +279,11 @@ const initializeWidgetLogic = async () => {
     const pcSheetName = document.getElementById('apPcSheetName');
     const pcSheetHint = document.getElementById('apPcSheetHint');
     const pcSheetLink = document.getElementById('apPcSheetLink');
+    const pcSheetLabel = document.getElementById('apPcSheetLabel');
 
     pcSettingsBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
+    document.getElementById('apPcHintOptionsBtn').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
+    optionsLink.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
 
     // Onboarding elements
     const onboardingSection = document.getElementById('apOnboarding');
@@ -632,6 +640,20 @@ const initializeWidgetLogic = async () => {
 
     const checkAuthStatus = async () => {
         try {
+            // Si el contexto de la extensión fue invalidado (ej. recarga de la extensión)
+            // chrome.storage deja de estar disponible
+            if (!chrome?.storage?.sync) {
+                profileCard.style.display = 'none';
+                authSection.style.display = 'block';
+                disconnectWrap.style.display = 'block';
+                authStatusText.style.display = 'block';
+                authStatusText.innerHTML = '⚠️ Recarga la página para reconectar';
+                authStatusText.className = 'ap-auth-status disconnected';
+                loginBtn.style.display = 'none';
+                extractBtn.disabled = true;
+                return;
+            }
+
             authStatusText.innerHTML = '<span class="ap-loader" style="display:inline-block; border-color:#0f172a transparent transparent transparent; width:12px; height:12px; margin-right: 4px;"></span> Conectando...';
             // Desactiva el botón de login durante la carga para evitar spam
             loginBtn.style.display = 'none';
@@ -693,24 +715,26 @@ const initializeWidgetLogic = async () => {
                     pcSheetName.textContent = storageConfig.defaultSheetName || 'Hoja vinculada';
                     pcSheetName.className = 'ap-pc-sheet-name-big ap-pc-sheet-ok';
                     pcSheetHint.style.display = 'none';
+                    pcSheetLabel.style.display = 'flex';
                     pcSheetLink.href = `https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit`;
                     pcSheetLink.style.display = 'flex';
                 } else {
                     pcSheetName.textContent = '¡Falta tu base de datos!';
                     pcSheetName.className = 'ap-pc-sheet-name-big ap-pc-sheet-warn';
                     pcSheetHint.style.display = 'block';
+                    pcSheetLabel.style.display = 'none';
                     pcSheetLink.style.display = 'none';
                 }
 
                 profileCard.style.display = 'flex';
-                authStatusText.style.display = 'none';
-                loginBtn.style.display = 'none';
+                disconnectWrap.style.display = 'none';
 
                 if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
 
             } else {
                 // NO autenticado
                 profileCard.style.display = 'none';
+                disconnectWrap.style.display = 'block';
                 authStatusText.style.display = 'block';
                 authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Conecta tu cuenta Google';
                 authStatusText.className = 'ap-auth-status disconnected';
@@ -729,16 +753,17 @@ const initializeWidgetLogic = async () => {
             }
         } catch (err) {
             console.error('Auth error in checkAuthStatus:', err);
+            profileCard.style.display = 'none';
             authSection.style.display = 'block';
+            disconnectWrap.style.display = 'block';
+            authStatusText.style.display = 'block';
             authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> API Desconectada o Despertando';
             authStatusText.className = 'ap-auth-status disconnected';
             extractBtn.disabled = true;
 
             loginBtn.innerHTML = '🔄 Reintentar Conexión';
             loginBtn.style.display = 'flex';
-            loginBtn.onclick = async () => {
-                await checkAuthStatus();
-            };
+            loginBtn.onclick = () => checkAuthStatus();
         }
     };
 
@@ -751,9 +776,6 @@ const initializeWidgetLogic = async () => {
         }
     });
 
-    optionsLink.addEventListener('click', () => {
-        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-    });
 
 
 

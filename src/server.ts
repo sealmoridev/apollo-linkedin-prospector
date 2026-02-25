@@ -346,9 +346,62 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
 
     console.log(`[API] Saving lead to sheet ${spreadsheetId} for user ${userId}`);
 
-    const sheetResult = await sheetsService.appendLead(userId, spreadsheetId, lead, sheetName);
+    // Buscar ExtensionUser para obtener sdrInfo
+    let sdrInfo: { id: string; nombre: string | null; email: string } | undefined;
+    let extensionUser: { id: string; nombre: string | null; email: string; empresa_id: string } | null = null;
+    try {
+      extensionUser = await prisma.extensionUser.findUnique({
+        where: { id: userId },
+        select: { id: true, nombre: true, email: true, empresa_id: true }
+      });
+      if (extensionUser) {
+        sdrInfo = { id: extensionUser.id, nombre: extensionUser.nombre, email: extensionUser.email };
+      }
+    } catch (_) { /* ignorar si no existe */ }
+
+    const sheetResult = await sheetsService.appendLead(userId, spreadsheetId, lead, sheetName, sdrInfo);
 
     if (sheetResult.success) {
+      // Crear Consumo con lead_data para el historial de capturas
+      if (extensionUser) {
+        const primaryEmail = (lead as any).primaryEmail || lead.email || lead.personalEmail || null;
+        const rawStatus = (lead as any).emailStatus;
+        try {
+          await prisma.consumo.create({
+            data: {
+              usuario_id: extensionUser.id,
+              empresa_id: extensionUser.empresa_id,
+              creditos_apollo: 0,
+              creditos_verifier: 0,
+              sheet_id: sheetResult.spreadsheetId || spreadsheetId,
+              sheet_name: sheetName || null,
+              lead_data: {
+                created_at: new Date().toISOString(),
+                full_name: lead.fullName || null,
+                first_name: lead.firstName || null,
+                last_name: lead.lastName || null,
+                title: lead.title || null,
+                primary_email: primaryEmail,
+                personal_email: lead.personalEmail || null,
+                phone_number: lead.phoneNumber || null,
+                company_name: lead.company || null,
+                company_domain: lead.companyDomain || null,
+                industry: lead.industry || null,
+                location: lead.location || null,
+                linkedin_url: lead.linkedinUrl || null,
+                email_status: rawStatus || null,
+                sdr_id: extensionUser.id,
+                sdr_name: extensionUser.nombre || null,
+                sdr_mail: extensionUser.email
+              }
+            }
+          });
+        } catch (consumoErr) {
+          console.error('[API] Error creating sheet consumo record:', consumoErr);
+          // No bloqueamos la respuesta si falla el log
+        }
+      }
+
       res.json({ success: true, message: 'Lead saved successfully', spreadsheetId: sheetResult.spreadsheetId });
     } else {
       res.status(500).json({ success: false, error: 'Failed to save logic in Sheets' });
