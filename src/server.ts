@@ -99,8 +99,13 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// Página de inicio
+// Página de inicio → redirigir al backoffice
 app.get('/', (req: Request, res: Response) => {
+  res.redirect('/admin');
+});
+
+// Info de la API (para uso interno/debugging)
+app.get('/api', (req: Request, res: Response) => {
   res.json({
     name: 'Apollo LinkedIn Prospector API',
     version: '1.0.0',
