@@ -420,7 +420,7 @@
             <h1>Configuración de MR Prospect</h1>
         </div>
 
-        <!-- Sección Configuración del Servidor (Antigua Opciones) -->
+        <!-- Sección Configuración del Servidor -->
         <div class="section">
             <h2><svg style="width:16px; height:16px; margin-right:6px; vertical-align:-3px;" viewBox="0 0 24 24"
                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -428,19 +428,31 @@
                     <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
                     <line x1="6" y1="6" x2="6.01" y2="6"></line>
                     <line x1="6" y1="18" x2="6.01" y2="18"></line>
-                </svg> Conexión al Backend</h2>
+                </svg> Servidor</h2>
             <div class="card">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="apiUrl">URL Base de tu API</label>
-                    <input type="text" id="apiUrl" placeholder="https://tu-app.up.railway.app">
-                    <div id="apiUrlWarning" style="display:none; margin-top:8px; padding:10px 12px; background:#fefce8; border:1px solid #fde047; border-radius:8px; font-size:13px; color:#854d0e;">
-                        ⚠️ Estás usando <strong>localhost</strong>. Introduce la URL de tu servidor en producción y guarda.
+                <!-- Vista resumida (por defecto) -->
+                <div id="apiUrlDisplay" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;flex-shrink:0;"></span>
+                        <span id="apiUrlDisplayText" style="font-size:14px; font-weight:500; color:#0f172a;">mrprospect.app</span>
                     </div>
+                    <button id="apiUrlChangeBtn" style="background:none;border:none;cursor:pointer;font-size:13px;color:#9941c0;font-weight:500;padding:4px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='none'">Cambiar</button>
                 </div>
-                <div style="margin-top: 16px; text-align: right;">
-                    <button id="saveApiBtn" class="btn">Guardar URL</button>
+                <!-- Formulario de edición (oculto por defecto) -->
+                <div id="apiUrlForm" style="display:none;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="apiUrl">URL del servidor</label>
+                        <input type="text" id="apiUrl" placeholder="https://mrprospect.app">
+                        <div id="apiUrlWarning" style="display:none; margin-top:8px; padding:10px 12px; background:#fefce8; border:1px solid #fde047; border-radius:8px; font-size:13px; color:#854d0e;">
+                            ⚠️ Estás usando <strong>localhost</strong>. Usa la URL de producción en uso real.
+                        </div>
+                    </div>
+                    <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+                        <button id="cancelApiBtn" style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:#64748b;">Cancelar</button>
+                        <button id="saveApiBtn" class="btn">Guardar</button>
+                    </div>
+                    <div id="apiMessage" class="message-box"></div>
                 </div>
-                <div id="apiMessage" class="message-box"></div>
             </div>
         </div>
 

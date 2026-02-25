@@ -451,14 +451,26 @@ app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
 });
 
 // 3. Verificar estado (Para la extensión de Chrome)
-app.get('/api/auth/status', (req: Request, res: Response) => {
+app.get('/api/auth/status', async (req: Request, res: Response) => {
   const userId = (req.query.userId as string) || 'default';
+  const apiKey = req.query.apiKey as string | undefined;
   const tokens = tokenStorage.getToken(userId);
 
   if (tokens) {
+    let empresa = null;
+    if (apiKey) {
+      try {
+        empresa = await prisma.empresa.findUnique({
+          where: { tenant_api_key: apiKey },
+          select: { nombre: true, logo_url: true }
+        });
+      } catch (_) { /* ignorar errores de lookup */ }
+    }
     res.json({
       authenticated: true,
-      spreadsheetId: tokens.spreadsheetId || null
+      spreadsheetId: tokens.spreadsheetId || null,
+      googleProfile: tokens.googleProfile || null,
+      empresa
     });
   } else {
     res.json({ authenticated: false });

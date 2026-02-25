@@ -62,7 +62,40 @@ const widgetHTML = `
 
       <!-- Sección de Auth -->
       <div id="apAuthSection" class="ap-auth-section">
-        <div class="ap-auth-title">Google Sheets Sync</div>
+
+        <!-- Profile Card (visible cuando conectado) -->
+        <div id="apProfileCard" class="ap-profile-card" style="display:none;">
+          <!-- Fila empresa -->
+          <div class="ap-pc-row ap-pc-company-row">
+            <div id="apPcCompanyLogo" class="ap-pc-company-logo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </div>
+            <span id="apPcCompanyName" class="ap-pc-company-name">—</span>
+            <button id="apPcSettingsBtn" class="ap-pc-settings-btn" title="Configuración">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </button>
+          </div>
+          <div class="ap-pc-sep"></div>
+          <!-- Fila usuario Google -->
+          <div class="ap-pc-row ap-pc-user-row">
+            <div id="apPcAvatar" class="ap-pc-avatar">?</div>
+            <div class="ap-pc-user-info">
+              <div id="apPcName" class="ap-pc-name">—</div>
+              <div id="apPcEmail" class="ap-pc-email">—</div>
+            </div>
+          </div>
+          <div class="ap-pc-sep"></div>
+          <!-- Fila sheet -->
+          <div class="ap-pc-row ap-pc-sheet-row">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#0f9d58" style="flex-shrink:0;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3.9 16.1h-6.2v-2.2h6.2v2.2zm0-4.3h-6.2v-2.2h6.2v2.2zm0-4.4h-6.2V8.2h6.2v2.2zm-7.6 8.7H5V8.2h2.5v10.9zm13.1 0h-2.5V8.2h2.5v10.9z"/></svg>
+            <span id="apPcSheetName" class="ap-pc-sheet-name">Sin hoja configurada</span>
+            <a id="apPcSheetLink" href="#" target="_blank" class="ap-pc-sheet-link" style="display:none;" title="Abrir hoja">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- Estado desconectado / cargando -->
         <div id="apAuthStatusText" class="ap-auth-status disconnected">Cargando estado...</div>
         <button id="apLoginBtn" class="ap-btn-google">
           <svg width="18" height="18" viewBox="0 0 48 48" style="margin-right: 5px;">
@@ -212,6 +245,19 @@ const initializeWidgetLogic = async () => {
     const resultDiv = document.getElementById('apResultDiv');
     const optionsLink = document.getElementById('apOptionsLink');
 
+    // Profile card elements
+    const profileCard = document.getElementById('apProfileCard');
+    const pcAvatar = document.getElementById('apPcAvatar');
+    const pcName = document.getElementById('apPcName');
+    const pcEmail = document.getElementById('apPcEmail');
+    const pcCompanyName = document.getElementById('apPcCompanyName');
+    const pcCompanyLogo = document.getElementById('apPcCompanyLogo');
+    const pcSettingsBtn = document.getElementById('apPcSettingsBtn');
+    const pcSheetName = document.getElementById('apPcSheetName');
+    const pcSheetLink = document.getElementById('apPcSheetLink');
+
+    pcSettingsBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
+
     // Onboarding elements
     const onboardingSection = document.getElementById('apOnboarding');
     const onboardingInput = document.getElementById('apOnboardingKey');
@@ -223,7 +269,7 @@ const initializeWidgetLogic = async () => {
 
     // Estado Interno
     let currentLinkedinUrl = window.location.href;
-    let apiUrl = 'http://localhost:3000';
+    let apiUrl = 'https://mrprospect.app';
     let tenantApiKey = '';
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
@@ -587,7 +633,8 @@ const initializeWidgetLogic = async () => {
             hideOnboarding();
             extractSection.style.display = 'flex';
 
-            const response = await fetch(`${apiUrl}/api/auth/status?userId=${userId}`);
+            const statusUrl = `${apiUrl}/api/auth/status?userId=${userId}${tenantApiKey ? '&apiKey=' + encodeURIComponent(tenantApiKey) : ''}`;
+            const response = await fetch(statusUrl);
             if (!response.ok) {
                 throw new Error(`Servidor respondió con ${response.status}`);
             }
@@ -595,61 +642,55 @@ const initializeWidgetLogic = async () => {
 
             isAuthenticated = data.authenticated;
             authSection.style.display = 'block';
-
-            // Limpiar acciones previas
             loginBtn.onclick = null;
 
             if (isAuthenticated) {
                 const storageConfig = await chrome.storage.sync.get(['defaultSheetId', 'defaultSheetName']);
                 const hasDefaultSheet = storageConfig && storageConfig.defaultSheetId;
 
-                if (!hasDefaultSheet) {
-                    // Autenticado pero SIN hoja configurada
-                    authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M12 12v4"></path><path d="M12 20h.01"></path></svg> Falta Configurar Hoja';
-                    authStatusText.className = 'ap-auth-status disconnected';
+                // — Poblar profile card —
+                const gp = data.googleProfile;
+                const emp = data.empresa;
 
-                    loginBtn.innerHTML = '⚙️ Configurar Destino en Opciones';
-                    loginBtn.style.display = 'flex';
-                    loginBtn.onclick = () => chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-
-                    if (!currentLinkedinUrl.includes('linkedin.com/in/')) {
-                        extractBtn.disabled = true;
-                    } else {
-                        extractBtn.disabled = false;
-                    }
+                // Avatar
+                if (gp?.avatar_url) {
+                    pcAvatar.innerHTML = `<img src="${gp.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer">`;
                 } else {
-                    // Autenticado y CON hoja
-                    let sheetNameHtml = storageConfig.defaultSheetName || 'Tu Base de Datos';
-                    if (storageConfig.defaultSheetId !== 'NEW_SHEET') {
-                        sheetNameHtml = `<a href="https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit" target="_blank" title="Abrir Base de Datos" style="color: #0f172a; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; padding-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
-                            <svg style="width:16px; height:16px; flex-shrink: 0; color: #0f9d58;" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3.9 16.1h-6.2v-2.2h6.2v2.2zm0-4.3h-6.2v-2.2h6.2v2.2zm0-4.4h-6.2V8.2h6.2v2.2zm-7.6 8.7H5V8.2h2.5v10.9zm13.1 0h-2.5V8.2h2.5v10.9z"/></svg>
-                            ${sheetNameHtml}
-                            <svg style="width:12px; height:12px; flex-shrink: 0; color: #64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                        </a>`;
-                    } else {
-                        sheetNameHtml = `<div style="padding-top: 4px; font-weight: 600; color: #0f172a; display: inline-flex; align-items: center; gap: 6px;">
-                            <svg style="width:16px; height:16px; flex-shrink: 0; color: #0f9d58;" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3.9 16.1h-6.2v-2.2h6.2v2.2zm0-4.3h-6.2v-2.2h6.2v2.2zm0-4.4h-6.2V8.2h6.2v2.2zm-7.6 8.7H5V8.2h2.5v10.9zm13.1 0h-2.5V8.2h2.5v10.9z"/></svg>
-                            ${sheetNameHtml} (Pendiente)
-                        </div>`;
-                    }
-                    authStatusText.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom: 4px;"><svg class="indicator" style="width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Enlazado a:</div>${sheetNameHtml}`;
-                    authStatusText.className = 'ap-auth-status connected';
-                    loginBtn.style.display = 'none';
-                    if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
+                    pcAvatar.textContent = (gp?.nombre || gp?.email || '?').charAt(0).toUpperCase();
                 }
+                pcName.textContent = gp?.nombre || '—';
+                pcEmail.textContent = (gp?.email || '—').replace('@mrprospect.local', ' (pendiente)');
+
+                // Empresa
+                pcCompanyName.textContent = emp?.nombre || '—';
+                if (emp?.logo_url) {
+                    pcCompanyLogo.innerHTML = `<img src="${emp.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:contain;">`;
+                }
+
+                // Sheet
+                if (hasDefaultSheet && storageConfig.defaultSheetId !== 'NEW_SHEET') {
+                    pcSheetName.textContent = storageConfig.defaultSheetName || 'Hoja vinculada';
+                    pcSheetName.style.color = '';
+                    pcSheetLink.href = `https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit`;
+                    pcSheetLink.style.display = 'flex';
+                } else {
+                    pcSheetName.textContent = hasDefaultSheet ? 'Pendiente de crear' : 'Sin hoja — configura en Opciones';
+                    pcSheetName.style.color = '#f59e0b';
+                    pcSheetLink.style.display = 'none';
+                }
+
+                profileCard.style.display = 'flex';
+                authStatusText.style.display = 'none';
+                loginBtn.style.display = 'none';
+
+                if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
+
             } else {
                 // NO autenticado
-                authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Desconectado';
+                profileCard.style.display = 'none';
+                authStatusText.style.display = 'block';
+                authStatusText.innerHTML = '<svg class="indicator" style="width:14px; height:14px; margin-right:4px; vertical-align:-2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Conecta tu cuenta Google';
                 authStatusText.className = 'ap-auth-status disconnected';
-                loginBtn.innerHTML = `
-                  <svg width="18" height="18" viewBox="0 0 48 48" style="margin-right: 5px;">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.7 17.74 9.5 24 9.5z"></path>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                    <path fill="none" d="M0 0h48v48H0z"></path>
-                  </svg>
-                  Conectar con Google`;
                 loginBtn.style.display = 'flex';
                 extractBtn.disabled = true;
 

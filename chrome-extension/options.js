@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const prefsMessage = document.getElementById('prefsMessage');
 
     // --- ESTADO INTERNO ---
-    let currentApiUrl = 'http://localhost:3000';
+    let currentApiUrl = 'https://mrprospect.app';
     let userId = null;
     let isAuthenticated = false;
     let allSheets = [];
@@ -62,17 +62,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     const config = await chrome.storage.sync.get(['apiUrl', 'defaultSheetId', 'defaultSheetName', 'tenantApiKey']);
 
     const apiUrlWarning = document.getElementById('apiUrlWarning');
+    const apiUrlDisplay = document.getElementById('apiUrlDisplay');
+    const apiUrlForm = document.getElementById('apiUrlForm');
+    const apiUrlDisplayText = document.getElementById('apiUrlDisplayText');
+    const apiUrlChangeBtn = document.getElementById('apiUrlChangeBtn');
+    const cancelApiBtn = document.getElementById('cancelApiBtn');
+
     const showApiUrlWarning = (url) => {
         if (apiUrlWarning) {
             apiUrlWarning.style.display = (!url || url.includes('localhost')) ? 'block' : 'none';
         }
     };
 
+    const updateApiUrlDisplay = (url) => {
+        const display = url.replace(/^https?:\/\//, '');
+        apiUrlDisplayText.textContent = display;
+        if (apiUrlInput) apiUrlInput.value = url;
+    };
+
     if (config.apiUrl) {
         currentApiUrl = config.apiUrl;
-        apiUrlInput.value = currentApiUrl;
     }
+    updateApiUrlDisplay(currentApiUrl);
     showApiUrlWarning(currentApiUrl);
+
+    // Toggle mostrar/ocultar formulario de URL
+    apiUrlChangeBtn.addEventListener('click', () => {
+        apiUrlDisplay.style.display = 'none';
+        apiUrlForm.style.display = 'block';
+        if (apiUrlInput) apiUrlInput.value = currentApiUrl;
+    });
+    cancelApiBtn.addEventListener('click', () => {
+        apiUrlForm.style.display = 'none';
+        apiUrlDisplay.style.display = 'flex';
+    });
 
     if (config.defaultSheetId) {
         selectedSheetId = config.defaultSheetId;
@@ -119,8 +142,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         chrome.storage.sync.set({ apiUrl: urlToSave }, () => {
             currentApiUrl = urlToSave;
+            updateApiUrlDisplay(urlToSave);
             showApiUrlWarning(urlToSave);
-            showMessage(apiMessage, '<div style="display:flex;align-items:center;gap:6px;"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> URL Base guardada con éxito</div>');
+            apiUrlForm.style.display = 'none';
+            apiUrlDisplay.style.display = 'flex';
+            showMessage(apiMessage, '<div style="display:flex;align-items:center;gap:6px;"><svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> URL guardada</div>');
             checkAuthStatus();
         });
     });
