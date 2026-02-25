@@ -19,12 +19,6 @@ dotenv.config();
  */
 
 const PORT = parseInt(process.env.PORT || '3000');
-const APOLLO_API_KEY = process.env.APOLLO_API_KEY;
-
-if (!APOLLO_API_KEY) {
-  console.error('❌ Error: APOLLO_API_KEY no está configurada');
-  process.exit(1);
-}
 
 import { tenantAuthMiddleware } from './middlewares/tenant-auth';
 import { prisma } from './lib/prisma';
