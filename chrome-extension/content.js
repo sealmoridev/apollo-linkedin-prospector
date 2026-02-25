@@ -641,6 +641,9 @@ const initializeWidgetLogic = async () => {
     // --- AUTHENTICATION & SHEETS ---
 
     const checkAuthStatus = async () => {
+        // Guard: el widget puede haber sido eliminado por la navegación SPA de LinkedIn
+        if (!document.getElementById('apolloWidgetPanel')) return;
+
         try {
             // Si el contexto de la extensión fue invalidado (ej. recarga de la extensión)
             // chrome.storage deja de estar disponible
@@ -774,7 +777,7 @@ const initializeWidgetLogic = async () => {
     // Detectar cuando el usuario vuelve a la pestaña de LinkedIn (probablemente después de loguearse en Google)
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            checkAuthStatus(); // Refrescar estado de Auth silenciosamente
+            checkAuthStatus().catch(() => {}); // Silenciar errores en refresco pasivo
         }
     });
 
