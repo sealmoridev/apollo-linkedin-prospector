@@ -13,7 +13,10 @@ import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
     CartesianGrid, Tooltip
 } from 'recharts';
-import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
+import { Separator } from '../components/ui/separator';
+import type { LeadData } from '../lib/api';
+import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight, ExternalLink } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -84,6 +87,7 @@ export default function MiEmpresa() {
     // Últimas capturas (preview)
     const [lastCaptures, setLastCaptures] = useState<Consumo[]>([]);
     const [loadingCaptures, setLoadingCaptures] = useState(false);
+    const [capturePanel, setCapturePanel] = useState<{ lead: LeadData; sheet_name: string | null } | null>(null);
 
     // Date range
     const [preset, setPreset] = useState<RangePreset>('7d');
@@ -163,7 +167,7 @@ export default function MiEmpresa() {
     const totalExtracciones = consumos.length;
     const totalApollo = useMemo(() => consumos.reduce((s, c) => s + c.creditos_apollo, 0), [consumos]);
     const totalVerifier = useMemo(() => consumos.reduce((s, c) => s + c.creditos_verifier, 0), [consumos]);
-    const sdrsActivos = useMemo(() => new Set(consumos.map(c => c.usuario_id)).size, [consumos]);
+    const sdrsActivos = useMemo(() => new Set(consumos.map(c => c.usuario?.email ?? c.usuario_id)).size, [consumos]);
 
     const chartData = useMemo(() => {
         const byDate = new Map<string, { date: string; extracciones: number; apollo: number }>();
@@ -181,24 +185,28 @@ export default function MiEmpresa() {
         }));
     }, [consumos, appliedRange]);
 
-    // Ranking SDR: fusiona actividad del período + datos de perfil
+    // Ranking SDR: agrupa por email para unificar IDs distintos del mismo SDR
     const sdrRanking = useMemo(() => {
-        const usuarioMap = new Map(usuarios.map(u => [u.id, u]));
-        const byId = new Map<string, { id: string; extracciones: number; apollo: number; verifier: number }>();
+        // email → primer usuario que tenga ese email (para avatar/nombre)
+        const emailToUser = new Map(usuarios.map(u => [u.email, u]));
+        const byEmail = new Map<string, { email: string; extracciones: number; apollo: number; verifier: number }>();
         consumos.forEach(c => {
-            const prev = byId.get(c.usuario_id) || { id: c.usuario_id, extracciones: 0, apollo: 0, verifier: 0 };
+            const email = c.usuario?.email
+                ?? usuarios.find(u => u.id === c.usuario_id)?.email
+                ?? c.usuario_id;
+            const prev = byEmail.get(email) || { email, extracciones: 0, apollo: 0, verifier: 0 };
             prev.extracciones += 1;
             prev.apollo += c.creditos_apollo;
             prev.verifier += c.creditos_verifier;
-            byId.set(c.usuario_id, prev);
+            byEmail.set(email, prev);
         });
-        // Agregar SDRs registrados sin actividad en el período
+        // Incluir SDRs registrados sin actividad en el período
         usuarios.forEach(u => {
-            if (!byId.has(u.id)) byId.set(u.id, { id: u.id, extracciones: 0, apollo: 0, verifier: 0 });
+            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, apollo: 0, verifier: 0 });
         });
-        return Array.from(byId.values())
+        return Array.from(byEmail.values())
             .sort((a, b) => b.extracciones - a.extracciones)
-            .map(r => ({ ...r, sdr: usuarioMap.get(r.id) }));
+            .map(r => ({ ...r, sdr: emailToUser.get(r.email) }));
     }, [consumos, usuarios]);
 
     const registrosRoute = empresaId ? `/empresas/${empresaId}/historial` : '/historial';
@@ -372,10 +380,10 @@ export default function MiEmpresa() {
                             <TableBody>
                                 {sdrRanking.map((r, i) => {
                                     const u = r.sdr;
-                                    const displayName = u?.nombre || u?.email || r.id;
-                                    const displayEmail = u?.nombre ? u.email : undefined;
+                                    const displayName = u?.nombre || r.email;
+                                    const displayEmail = u?.nombre ? r.email : undefined;
                                     return (
-                                        <TableRow key={r.id}>
+                                        <TableRow key={r.email}>
                                             <TableCell className="text-muted-foreground font-medium w-8">
                                                 {i + 1}
                                             </TableCell>
@@ -447,7 +455,7 @@ export default function MiEmpresa() {
                                         const sdr = usuarios.find(u => u.id === c.usuario_id);
                                         const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || '—';
                                         return (
-                                            <TableRow key={c.id}>
+                                            <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setCapturePanel({ lead: ld, sheet_name: c.sheet_name })}>
                                                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                                     {new Date(c.fecha).toLocaleDateString('es-CL')}
                                                 </TableCell>
@@ -482,6 +490,84 @@ export default function MiEmpresa() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Panel lateral de detalle de captura */}
+            <Sheet open={!!capturePanel} onOpenChange={open => { if (!open) setCapturePanel(null); }}>
+                <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
+                    {capturePanel && (() => {
+                        const ld = capturePanel.lead;
+                        const statusMap: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
+                        const statusLabel = ld.email_status ? (statusMap[ld.email_status] || ld.email_status) : 'Sin verificar';
+                        const statusVariant = ld.email_status === 'valid' ? 'default' : ld.email_status === 'invalid' ? 'destructive' : 'secondary';
+                        return (
+                            <>
+                                <SheetHeader>
+                                    <SheetTitle>{ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
+                                    <SheetDescription className="flex flex-wrap gap-1.5 items-center">
+                                        {ld.title && <span>{ld.title}</span>}
+                                        {ld.company_name && <span>· {ld.company_name}</span>}
+                                    </SheetDescription>
+                                </SheetHeader>
+                                <div className="px-6 pb-6 space-y-4">
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
+                                        <dl className="space-y-1.5 text-sm">
+                                            {ld.primary_email && (
+                                                <div className="flex gap-2 items-start">
+                                                    <dt className="text-muted-foreground w-28 shrink-0">Email principal</dt>
+                                                    <dd className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-medium break-all">{ld.primary_email}</span>
+                                                        <Badge variant={statusVariant as any} className="text-[10px] shrink-0">{statusLabel}</Badge>
+                                                    </dd>
+                                                </div>
+                                            )}
+                                            {ld.personal_email && ld.personal_email !== ld.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email personal</dt><dd className="break-all">{ld.personal_email}</dd></div>}
+                                            {ld.phone_number && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt><dd>{ld.phone_number}</dd></div>}
+                                        </dl>
+                                    </div>
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
+                                        <dl className="space-y-1.5 text-sm">
+                                            {ld.company_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{ld.company_name}</dd></div>}
+                                            {ld.company_domain && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Dominio</dt><dd>{ld.company_domain}</dd></div>}
+                                            {ld.industry && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Industria</dt><dd>{ld.industry}</dd></div>}
+                                            {ld.location && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt><dd>{ld.location}</dd></div>}
+                                        </dl>
+                                    </div>
+                                    {ld.linkedin_url && (
+                                        <>
+                                            <Separator />
+                                            <a href={ld.linkedin_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline">
+                                                <ExternalLink className="h-3.5 w-3.5" />Ver perfil LinkedIn
+                                            </a>
+                                        </>
+                                    )}
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
+                                        <dl className="space-y-1.5 text-sm">
+                                            {ld.sdr_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{ld.sdr_name}</dd></div>}
+                                            {ld.sdr_mail && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email</dt><dd className="break-all">{ld.sdr_mail}</dd></div>}
+                                            {ld.created_at && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Capturado</dt><dd>{new Date(ld.created_at).toLocaleString('es-CL')}</dd></div>}
+                                        </dl>
+                                    </div>
+                                    {capturePanel.sheet_name && (
+                                        <>
+                                            <Separator />
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sheet</p>
+                                                <p className="text-sm">{capturePanel.sheet_name}</p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </>
+                        );
+                    })()}
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }

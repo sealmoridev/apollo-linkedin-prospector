@@ -90,7 +90,7 @@ export default function Historial() {
 
     // Detail panel
     const [panelOpen, setPanelOpen] = useState(false);
-    const [selectedLead, setSelectedLead] = useState<LeadData | null>(null);
+    const [selectedCapture, setSelectedCapture] = useState<{ lead: LeadData; sheet_name: string | null } | null>(null);
 
     // Filters
     const [desde, setDesde] = useState(defaultDesde);
@@ -312,6 +312,7 @@ export default function Historial() {
                             <TableRow>
                                 <TableHead className="pl-6">Fecha</TableHead>
                                 <TableHead>Prospecto</TableHead>
+                                <TableHead>Empresa</TableHead>
                                 <TableHead>SDR</TableHead>
                                 <TableHead>Sheet</TableHead>
                                 <TableHead className="text-right">Apollo</TableHead>
@@ -321,11 +322,11 @@ export default function Historial() {
                         <TableBody>
                             {loadingData ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
+                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
                                 </TableRow>
                             ) : data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
+                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
                                 </TableRow>
                             ) : (
                                 data.map(c => {
@@ -337,7 +338,7 @@ export default function Historial() {
                                         <TableRow
                                             key={c.id}
                                             className={isCapture ? 'cursor-pointer hover:bg-muted/50' : ''}
-                                            onClick={isCapture ? () => { setSelectedLead(ld!); setPanelOpen(true); } : undefined}
+                                            onClick={isCapture ? () => { setSelectedCapture({ lead: ld!, sheet_name: c.sheet_name }); setPanelOpen(true); } : undefined}
                                         >
                                             <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
                                                 {new Date(c.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -353,6 +354,9 @@ export default function Historial() {
                                                 ) : (
                                                     <span className="text-xs text-muted-foreground italic">Solo créditos</span>
                                                 )}
+                                            </TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {isCapture ? (ld!.company_name || '—') : '—'}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-1.5">
@@ -387,58 +391,80 @@ export default function Historial() {
             </Card>
 
             {/* Detail panel */}
-            <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
+            <Sheet open={panelOpen} onOpenChange={open => { setPanelOpen(open); if (!open) setSelectedCapture(null); }}>
                 <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
-                    {selectedLead && (
-                        <>
-                            <SheetHeader>
-                                <SheetTitle>{selectedLead.full_name || `${selectedLead.first_name || ''} ${selectedLead.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
-                                <SheetDescription className="flex flex-wrap gap-1.5 items-center">
-                                    {selectedLead.title && <span>{selectedLead.title}</span>}
-                                    {selectedLead.company_name && <span>· {selectedLead.company_name}</span>}
-                                </SheetDescription>
-                                <div className="mt-1"><EmailStatusBadge status={selectedLead.email_status} /></div>
-                            </SheetHeader>
-                            <div className="px-6 pb-6 space-y-4">
-                                <Separator />
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
-                                    <dl className="space-y-1.5 text-sm">
-                                        {selectedLead.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email principal</dt><dd className="font-medium break-all">{selectedLead.primary_email}</dd></div>}
-                                        {selectedLead.personal_email && selectedLead.personal_email !== selectedLead.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email personal</dt><dd className="break-all">{selectedLead.personal_email}</dd></div>}
-                                        {selectedLead.phone_number && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt><dd>{selectedLead.phone_number}</dd></div>}
-                                    </dl>
+                    {selectedCapture && (() => {
+                        const ld = selectedCapture.lead;
+                        const statusMap: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
+                        const statusLabel = ld.email_status ? (statusMap[ld.email_status] || ld.email_status) : 'Sin verificar';
+                        const statusVariant = ld.email_status === 'valid' ? 'default' : ld.email_status === 'invalid' ? 'destructive' : 'secondary';
+                        return (
+                            <>
+                                <SheetHeader>
+                                    <SheetTitle>{ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
+                                    <SheetDescription className="flex flex-wrap gap-1.5 items-center">
+                                        {ld.title && <span>{ld.title}</span>}
+                                        {ld.company_name && <span>· {ld.company_name}</span>}
+                                    </SheetDescription>
+                                </SheetHeader>
+                                <div className="px-6 pb-6 space-y-4">
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
+                                        <dl className="space-y-1.5 text-sm">
+                                            {ld.primary_email && (
+                                                <div className="flex gap-2 items-start">
+                                                    <dt className="text-muted-foreground w-28 shrink-0">Email principal</dt>
+                                                    <dd className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-medium break-all">{ld.primary_email}</span>
+                                                        <Badge variant={statusVariant as any} className="text-[10px] shrink-0">{statusLabel}</Badge>
+                                                    </dd>
+                                                </div>
+                                            )}
+                                            {ld.personal_email && ld.personal_email !== ld.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email personal</dt><dd className="break-all">{ld.personal_email}</dd></div>}
+                                            {ld.phone_number && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt><dd>{ld.phone_number}</dd></div>}
+                                        </dl>
+                                    </div>
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
+                                        <dl className="space-y-1.5 text-sm">
+                                            {ld.company_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{ld.company_name}</dd></div>}
+                                            {ld.company_domain && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Dominio</dt><dd>{ld.company_domain}</dd></div>}
+                                            {ld.industry && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Industria</dt><dd>{ld.industry}</dd></div>}
+                                            {ld.location && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt><dd>{ld.location}</dd></div>}
+                                        </dl>
+                                    </div>
+                                    {ld.linkedin_url && (
+                                        <>
+                                            <Separator />
+                                            <a href={ld.linkedin_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline">
+                                                <ExternalLink className="h-3.5 w-3.5" />Ver perfil LinkedIn
+                                            </a>
+                                        </>
+                                    )}
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
+                                        <dl className="space-y-1.5 text-sm">
+                                            {ld.sdr_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{ld.sdr_name}</dd></div>}
+                                            {ld.sdr_mail && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email</dt><dd className="break-all">{ld.sdr_mail}</dd></div>}
+                                            {ld.created_at && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Capturado</dt><dd>{new Date(ld.created_at).toLocaleString('es-CL')}</dd></div>}
+                                        </dl>
+                                    </div>
+                                    {selectedCapture.sheet_name && (
+                                        <>
+                                            <Separator />
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sheet</p>
+                                                <p className="text-sm">{selectedCapture.sheet_name}</p>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                <Separator />
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
-                                    <dl className="space-y-1.5 text-sm">
-                                        {selectedLead.company_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{selectedLead.company_name}</dd></div>}
-                                        {selectedLead.company_domain && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Dominio</dt><dd>{selectedLead.company_domain}</dd></div>}
-                                        {selectedLead.industry && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Industria</dt><dd>{selectedLead.industry}</dd></div>}
-                                        {selectedLead.location && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt><dd>{selectedLead.location}</dd></div>}
-                                    </dl>
-                                </div>
-                                {selectedLead.linkedin_url && (
-                                    <>
-                                        <Separator />
-                                        <a href={selectedLead.linkedin_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline">
-                                            <ExternalLink className="h-3.5 w-3.5" />Ver perfil LinkedIn
-                                        </a>
-                                    </>
-                                )}
-                                <Separator />
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
-                                    <dl className="space-y-1.5 text-sm">
-                                        {selectedLead.sdr_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{selectedLead.sdr_name}</dd></div>}
-                                        {selectedLead.sdr_mail && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email</dt><dd className="break-all">{selectedLead.sdr_mail}</dd></div>}
-                                        {selectedLead.created_at && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Capturado</dt><dd>{new Date(selectedLead.created_at).toLocaleString('es-CL')}</dd></div>}
-                                    </dl>
-                                </div>
-                            </div>
-                        </>
-                    )}
+                            </>
+                        );
+                    })()}
                 </SheetContent>
             </Sheet>
         </div>
