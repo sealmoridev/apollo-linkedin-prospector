@@ -42,7 +42,9 @@ export class SheetsService {
             prompt: 'consent', // Forzar consentimiento para asegurar el refresh token
             scope: [
                 'https://www.googleapis.com/auth/spreadsheets',
-                'https://www.googleapis.com/auth/drive.readonly'
+                'https://www.googleapis.com/auth/drive.readonly',
+                'https://www.googleapis.com/auth/userinfo.email',
+                'https://www.googleapis.com/auth/userinfo.profile'
             ]
         });
     }
