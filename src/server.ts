@@ -501,7 +501,8 @@ app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`🌐 Access at: ${publicUrl}`);
   console.log(`📡 Webhook ready at: ${webhookUrl}`);
-  console.log(`💚 Health check: ${publicUrl}/health\n`);
+  console.log(`💚 Health check: ${publicUrl}/health`);
+  console.log(`🔑 Google OAuth redirect URI: ${publicUrl}/api/auth/google/callback\n`);
   console.log('Ready to receive enrichment requests!\n');
 });
 
