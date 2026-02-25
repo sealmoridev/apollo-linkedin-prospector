@@ -21,9 +21,15 @@ const widgetHTML = `
 
   <div id="apolloWidgetPanel" class="apollo-prospector-widget">
     <div class="ap-header">
-      <div class="ap-header-title">
-        <img src="${logo48}" class="ap-header-logo" alt="Logo" style="background: none;">
-        MR Prospect
+      <div class="ap-header-user">
+        <div id="apHeaderAvatar" class="ap-header-avatar">
+          <img src="${logo48}" id="apHeaderAvatarImg" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:none;" referrerpolicy="no-referrer">
+          <span id="apHeaderAvatarInitial" style="font-size:14px;font-weight:700;">M</span>
+        </div>
+        <div class="ap-header-user-info">
+          <div id="apHeaderName" class="ap-header-name">MR Prospect</div>
+          <div id="apHeaderEmail" class="ap-header-email">Cargando...</div>
+        </div>
       </div>
       <button id="apCloseBtn" class="ap-close-btn">×</button>
     </div>
@@ -65,34 +71,40 @@ const widgetHTML = `
 
         <!-- Profile Card (visible cuando conectado) -->
         <div id="apProfileCard" class="ap-profile-card" style="display:none;">
-          <!-- Fila empresa -->
-          <div class="ap-pc-row ap-pc-company-row">
-            <div id="apPcCompanyLogo" class="ap-pc-company-logo">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+
+          <!-- Tarjeta Empresa -->
+          <div class="ap-pc-company-card">
+            <div id="apPcCompanyLogo" class="ap-pc-company-logo-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
             </div>
-            <span id="apPcCompanyName" class="ap-pc-company-name">—</span>
+            <div class="ap-pc-company-info">
+              <div class="ap-pc-company-label">Empresa</div>
+              <div id="apPcCompanyName" class="ap-pc-company-name">—</div>
+            </div>
             <button id="apPcSettingsBtn" class="ap-pc-settings-btn" title="Configuración">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             </button>
           </div>
-          <div class="ap-pc-sep"></div>
-          <!-- Fila usuario Google -->
-          <div class="ap-pc-row ap-pc-user-row">
-            <div id="apPcAvatar" class="ap-pc-avatar">?</div>
-            <div class="ap-pc-user-info">
-              <div id="apPcName" class="ap-pc-name">—</div>
-              <div id="apPcEmail" class="ap-pc-email">—</div>
+
+          <!-- Tarjeta Sheet -->
+          <div class="ap-pc-sheet-card">
+            <!-- Icono Google Sheets real -->
+            <svg width="28" height="36" viewBox="0 0 28 36" fill="none" style="flex-shrink:0;">
+              <path d="M17 0H3C1.3 0 0 1.3 0 3v30c0 1.7 1.3 3 3 3h22c1.7 0 3-1.3 3-3V11L17 0z" fill="#34A853"/>
+              <path d="M17 0v11h11L17 0z" fill="#188038"/>
+              <rect x="5" y="15" width="18" height="2.5" rx="1" fill="white"/>
+              <rect x="5" y="20" width="18" height="2.5" rx="1" fill="white"/>
+              <rect x="5" y="25" width="12" height="2.5" rx="1" fill="white"/>
+            </svg>
+            <div class="ap-pc-sheet-info">
+              <div class="ap-pc-sheet-label">Base de datos activa</div>
+              <div id="apPcSheetName" class="ap-pc-sheet-name-big">Sin configurar</div>
             </div>
-          </div>
-          <div class="ap-pc-sep"></div>
-          <!-- Fila sheet -->
-          <div class="ap-pc-row ap-pc-sheet-row">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="#0f9d58" style="flex-shrink:0;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3.9 16.1h-6.2v-2.2h6.2v2.2zm0-4.3h-6.2v-2.2h6.2v2.2zm0-4.4h-6.2V8.2h6.2v2.2zm-7.6 8.7H5V8.2h2.5v10.9zm13.1 0h-2.5V8.2h2.5v10.9z"/></svg>
-            <span id="apPcSheetName" class="ap-pc-sheet-name">Sin hoja configurada</span>
-            <a id="apPcSheetLink" href="#" target="_blank" class="ap-pc-sheet-link" style="display:none;" title="Abrir hoja">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            <a id="apPcSheetLink" href="#" target="_blank" class="ap-pc-sheet-link" style="display:none;" title="Abrir en Google Sheets">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             </a>
           </div>
+
         </div>
 
         <!-- Estado desconectado / cargando -->
@@ -197,7 +209,10 @@ const widgetHTML = `
     </div>
 
     <div class="ap-footer">
-      <span>MR Prospect v1.1.0</span>
+      <div style="display:flex;align-items:center;gap:5px;">
+        <img src="${logo16}" style="width:13px;height:13px;opacity:0.55;" alt="">
+        <span>MR Prospect</span>
+      </div>
       <a id="apOptionsLink" class="ap-options-link">Opciones</a>
     </div>
   </div>
@@ -245,11 +260,14 @@ const initializeWidgetLogic = async () => {
     const resultDiv = document.getElementById('apResultDiv');
     const optionsLink = document.getElementById('apOptionsLink');
 
+    // Header user elements
+    const headerAvatarImg = document.getElementById('apHeaderAvatarImg');
+    const headerAvatarInitial = document.getElementById('apHeaderAvatarInitial');
+    const headerName = document.getElementById('apHeaderName');
+    const headerEmail = document.getElementById('apHeaderEmail');
+
     // Profile card elements
     const profileCard = document.getElementById('apProfileCard');
-    const pcAvatar = document.getElementById('apPcAvatar');
-    const pcName = document.getElementById('apPcName');
-    const pcEmail = document.getElementById('apPcEmail');
     const pcCompanyName = document.getElementById('apPcCompanyName');
     const pcCompanyLogo = document.getElementById('apPcCompanyLogo');
     const pcSettingsBtn = document.getElementById('apPcSettingsBtn');
@@ -648,23 +666,25 @@ const initializeWidgetLogic = async () => {
                 const storageConfig = await chrome.storage.sync.get(['defaultSheetId', 'defaultSheetName']);
                 const hasDefaultSheet = storageConfig && storageConfig.defaultSheetId;
 
-                // — Poblar profile card —
+                // — Poblar header con perfil de usuario —
                 const gp = data.googleProfile;
                 const emp = data.empresa;
 
-                // Avatar
                 if (gp?.avatar_url) {
-                    pcAvatar.innerHTML = `<img src="${gp.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer">`;
+                    headerAvatarImg.src = gp.avatar_url;
+                    headerAvatarImg.style.display = 'block';
+                    headerAvatarInitial.style.display = 'none';
                 } else {
-                    pcAvatar.textContent = (gp?.nombre || gp?.email || '?').charAt(0).toUpperCase();
+                    headerAvatarInitial.textContent = (gp?.nombre || gp?.email || 'M').charAt(0).toUpperCase();
                 }
-                pcName.textContent = gp?.nombre || '—';
-                pcEmail.textContent = (gp?.email || '—').replace('@mrprospect.local', ' (pendiente)');
+                headerName.textContent = gp?.nombre || 'MR Prospect';
+                headerEmail.textContent = (gp?.email || '').replace('@mrprospect.local', ' ·  reconecta Google');
 
+                // — Poblar profile card —
                 // Empresa
                 pcCompanyName.textContent = emp?.nombre || '—';
                 if (emp?.logo_url) {
-                    pcCompanyLogo.innerHTML = `<img src="${emp.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:contain;">`;
+                    pcCompanyLogo.innerHTML = `<img src="${emp.logo_url}" style="width:36px;height:36px;border-radius:8px;object-fit:contain;">`;
                 }
 
                 // Sheet
@@ -674,7 +694,7 @@ const initializeWidgetLogic = async () => {
                     pcSheetLink.href = `https://docs.google.com/spreadsheets/d/${storageConfig.defaultSheetId}/edit`;
                     pcSheetLink.style.display = 'flex';
                 } else {
-                    pcSheetName.textContent = hasDefaultSheet ? 'Pendiente de crear' : 'Sin hoja — configura en Opciones';
+                    pcSheetName.textContent = hasDefaultSheet ? 'Pendiente de crear' : 'Configura en Opciones →';
                     pcSheetName.style.color = '#f59e0b';
                     pcSheetLink.style.display = 'none';
                 }
