@@ -59,7 +59,7 @@ export function Sidebar() {
             const base = `/empresas/${contextEmpresaId}`;
             return [
                 { to: base, label: 'Dashboard', Icon: LayoutDashboard, exact: true },
-                { to: `${base}/historial`, label: 'Historial', Icon: History },
+                { to: `${base}/historial`, label: 'Registros', Icon: History },
                 { to: `${base}/empresa`, label: 'Empresa', Icon: Building2 },
                 { to: `${base}/apis`, label: 'APIs', Icon: PlugZap },
                 { to: `${base}/extension`, label: 'Extensión Chrome', Icon: Globe },
@@ -73,7 +73,7 @@ export function Sidebar() {
         }
         return [
             { to: '/mi-empresa', label: 'Dashboard', Icon: LayoutDashboard, exact: false },
-            { to: '/historial', label: 'Historial', Icon: History, exact: false },
+            { to: '/historial', label: 'Registros', Icon: History, exact: false },
             { to: '/empresa', label: 'Empresa', Icon: Building2, exact: false },
             { to: '/apis', label: 'APIs', Icon: PlugZap, exact: false },
             { to: '/extension', label: 'Extensión Chrome', Icon: Globe, exact: false },

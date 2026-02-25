@@ -909,10 +909,8 @@ const initializeWidgetLogic = async () => {
             return;
         }
 
-        let customSheetName = undefined;
-        if (selectedSheetId === 'NEW_SHEET') {
-            customSheetName = storageConfig.defaultSheetName || 'Apollo Prospector Leads';
-        }
+        const customSheetName = storageConfig.defaultSheetName ||
+            (selectedSheetId === 'NEW_SHEET' ? 'Apollo Prospector Leads' : undefined);
 
         // Calculate secondary emails to pass to backend securely
         const emailsRaw = [extractedLeadData.email, extractedLeadData.personalEmail].filter(Boolean).join(', ');

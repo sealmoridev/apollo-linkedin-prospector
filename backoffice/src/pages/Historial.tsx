@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumoHistorial } from '../lib/api';
+import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumoHistorial, getConsumoSheetNames } from '../lib/api';
 import type { EmpresaDetail, ExtensionUser, Consumo } from '../lib/api';
 import { useActiveEmpresa } from '../ActiveEmpresaContext';
 import { toast } from 'sonner';
@@ -12,7 +12,10 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { Filter, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
+import { Separator } from '../components/ui/separator';
+import type { LeadData } from '../lib/api';
+import { Filter, X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -27,17 +30,12 @@ function defaultDesde() {
     return toISO(d);
 }
 
-// ─── Pagination component ─────────────────────────────────────────────────────
+// ─── Pagination ───────────────────────────────────────────────────────────────
 
-interface PaginationProps {
-    page: number;
-    totalPages: number;
-    onChange: (p: number) => void;
-}
+interface PaginationProps { page: number; totalPages: number; onChange: (p: number) => void; }
 
 function Pagination({ page, totalPages, onChange }: PaginationProps) {
     if (totalPages <= 1) return null;
-
     const pages: (number | '...')[] = [];
     if (totalPages <= 7) {
         for (let i = 1; i <= totalPages; i++) pages.push(i);
@@ -48,42 +46,31 @@ function Pagination({ page, totalPages, onChange }: PaginationProps) {
         if (page < totalPages - 2) pages.push('...');
         pages.push(totalPages);
     }
-
     return (
         <div className="flex items-center gap-1">
-            <Button
-                variant="outline" size="sm"
-                className="h-8 w-8 p-0"
-                disabled={page <= 1}
-                onClick={() => onChange(page - 1)}
-            >
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={page <= 1} onClick={() => onChange(page - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
             {pages.map((p, i) =>
                 p === '...'
-                    ? <span key={`ellipsis-${i}`} className="px-1.5 text-muted-foreground text-sm">…</span>
-                    : (
-                        <Button
-                            key={p}
-                            variant={p === page ? 'default' : 'outline'}
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={() => onChange(p as number)}
-                        >
-                            {p}
-                        </Button>
-                    )
+                    ? <span key={`e-${i}`} className="px-1.5 text-muted-foreground text-sm">…</span>
+                    : <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className="h-8 w-8 p-0" onClick={() => onChange(p as number)}>{p}</Button>
             )}
-            <Button
-                variant="outline" size="sm"
-                className="h-8 w-8 p-0"
-                disabled={page >= totalPages}
-                onClick={() => onChange(page + 1)}
-            >
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
                 <ChevronRight className="h-3.5 w-3.5" />
             </Button>
         </div>
     );
+}
+
+// ─── Email status badge ───────────────────────────────────────────────────────
+
+function EmailStatusBadge({ status }: { status: string | null }) {
+    if (!status) return <Badge variant="outline" className="text-[10px]">Sin verificar</Badge>;
+    const map: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
+    const label = map[status] || status;
+    const variant = status === 'valid' ? 'default' : status === 'invalid' ? 'destructive' : 'secondary';
+    return <Badge variant={variant as any} className="text-[10px]">{label}</Badge>;
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -94,20 +81,26 @@ export default function Historial() {
 
     const [empresa, setEmpresa] = useState<EmpresaDetail | null>(null);
     const [sdrs, setSdrs] = useState<ExtensionUser[]>([]);
+    const [sheetNames, setSheetNames] = useState<string[]>([]);
     const [data, setData] = useState<Consumo[]>([]);
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [loadingInit, setLoadingInit] = useState(true);
     const [loadingData, setLoadingData] = useState(false);
 
+    // Detail panel
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [selectedLead, setSelectedLead] = useState<LeadData | null>(null);
+
     // Filters
     const [desde, setDesde] = useState(defaultDesde);
     const [hasta, setHasta] = useState(toISO(new Date()));
     const [usuarioId, setUsuarioId] = useState('');
+    const [sheetNameFilter, setSheetNameFilter] = useState('');
+    const [tipoFilter, setTipoFilter] = useState<'all' | 'captures' | 'credits'>('all');
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(50);
 
-    // Pending (uncommitted) filter state — applied on "Aplicar" or preset click
     const [pendingDesde, setPendingDesde] = useState(defaultDesde);
     const [pendingHasta, setPendingHasta] = useState(toISO(new Date()));
 
@@ -117,103 +110,101 @@ export default function Historial() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [empresaId]);
 
-    // Init: load empresa + SDR list
+    // Init: load empresa + SDR list + sheet names
     useEffect(() => {
         const fetchEmpresa = empresaId ? getEmpresa(empresaId) : getMiEmpresa();
-
         fetchEmpresa
             .then(emp => {
                 setEmpresa(emp);
                 if (empresaId) setActiveEmpresa({ id: emp.id, nombre: emp.nombre, logo_url: emp.logo_url });
-                return getEmpresaUsuarios(emp.id);
+                return Promise.all([
+                    getEmpresaUsuarios(emp.id),
+                    getConsumoSheetNames(emp.id)
+                ]);
             })
-            .then(setSdrs)
+            .then(([users, names]) => {
+                setSdrs(users);
+                setSheetNames(names);
+            })
             .catch(() => toast.error('Error al inicializar'))
             .finally(() => setLoadingInit(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [empresaId]);
 
-    // Fetch data when any filter changes
+    // Fetch data when filters change
     const fetchData = useCallback(async (overridePage?: number) => {
         if (!empresa) return;
         const currentPage = overridePage ?? page;
         setLoadingData(true);
         try {
             const result = await getConsumoHistorial({
+                empresa_id: empresa.id,
                 desde,
                 hasta,
                 usuario_id: usuarioId || undefined,
+                sheet_name: sheetNameFilter || undefined,
+                only_leads: tipoFilter === 'captures' ? true : undefined,
                 page: currentPage,
                 limit
             });
-            setData(result.data);
+            // Client-side filter for "solo créditos" (lead_data == null)
+            let rows = result.data;
+            if (tipoFilter === 'credits') rows = rows.filter(c => !c.lead_data);
+            setData(rows);
             setTotal(result.total);
             setTotalPages(result.totalPages);
         } catch (err: any) {
-            toast.error(err.message || 'Error al cargar historial');
+            toast.error(err.message || 'Error al cargar registros');
         } finally {
             setLoadingData(false);
         }
-    }, [empresa, desde, hasta, usuarioId, page, limit]);
+    }, [empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
 
     useEffect(() => {
         if (empresa) fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [empresa, desde, hasta, usuarioId, page, limit]);
+    }, [empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
 
-    // Quick date presets
     const applyPreset = (days: number) => {
         const d = new Date();
         d.setDate(d.getDate() - (days - 1));
         d.setHours(0, 0, 0, 0);
         const newDesde = toISO(d);
         const newHasta = toISO(new Date());
-        setPendingDesde(newDesde);
-        setPendingHasta(newHasta);
-        setDesde(newDesde);
-        setHasta(newHasta);
+        setPendingDesde(newDesde); setPendingHasta(newHasta);
+        setDesde(newDesde); setHasta(newHasta);
         setPage(1);
     };
 
     const applyDateFilter = () => {
-        if (pendingDesde > pendingHasta) {
-            toast.error('"Desde" debe ser anterior a "Hasta"');
-            return;
-        }
-        setDesde(pendingDesde);
-        setHasta(pendingHasta);
-        setPage(1);
+        if (pendingDesde > pendingHasta) { toast.error('"Desde" debe ser anterior a "Hasta"'); return; }
+        setDesde(pendingDesde); setHasta(pendingHasta); setPage(1);
     };
 
     const clearFilters = () => {
-        const newDesde = defaultDesde();
-        const newHasta = toISO(new Date());
-        setPendingDesde(newDesde);
-        setPendingHasta(newHasta);
-        setDesde(newDesde);
-        setHasta(newHasta);
-        setUsuarioId('');
-        setPage(1);
+        const d = defaultDesde(); const h = toISO(new Date());
+        setPendingDesde(d); setPendingHasta(h);
+        setDesde(d); setHasta(h);
+        setUsuarioId(''); setSheetNameFilter(''); setTipoFilter('all'); setPage(1);
     };
 
-    const hasActiveFilters = usuarioId !== '' || desde !== defaultDesde() || hasta !== toISO(new Date());
+    const hasActiveFilters = usuarioId !== '' || sheetNameFilter !== '' || tipoFilter !== 'all'
+        || desde !== defaultDesde() || hasta !== toISO(new Date());
+
+    const sdrMap = new Map(sdrs.map(s => [s.id, s]));
 
     // ─ Render ─────────────────────────────────────────────────────────────────
 
     if (loadingInit) {
-        return (
-            <div className="flex h-64 items-center justify-center">
-                <div className="text-muted-foreground animate-pulse">Cargando...</div>
-            </div>
-        );
+        return <div className="flex h-64 items-center justify-center"><div className="text-muted-foreground animate-pulse">Cargando...</div></div>;
     }
 
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold">Historial de consumo</h1>
+                <h1 className="text-2xl font-bold">Registros</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                    Log detallado del uso de créditos por fecha y usuario.
+                    Historial completo de extracciones y capturas de leads.
                 </p>
             </div>
 
@@ -224,13 +215,8 @@ export default function Historial() {
                         <Filter className="h-4 w-4 text-muted-foreground" />
                         <CardTitle className="text-sm">Filtros</CardTitle>
                         {hasActiveFilters && (
-                            <Button
-                                variant="ghost" size="sm"
-                                className="h-6 px-2 text-xs text-muted-foreground gap-1 ml-auto"
-                                onClick={clearFilters}
-                            >
-                                <X className="h-3 w-3" />
-                                Limpiar
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground gap-1 ml-auto" onClick={clearFilters}>
+                                <X className="h-3 w-3" /> Limpiar
                             </Button>
                         )}
                     </div>
@@ -238,66 +224,62 @@ export default function Historial() {
                 <CardContent className="space-y-3">
                     {/* Quick presets */}
                     <div className="flex flex-wrap gap-2">
-                        {[
-                            { label: 'Hoy', days: 1 },
-                            { label: 'Ayer', days: 2 },
-                            { label: '7 días', days: 7 },
-                            { label: '30 días', days: 30 }
-                        ].map(p => (
-                            <Button
-                                key={p.label}
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => applyPreset(p.days)}
-                            >
-                                {p.label}
-                            </Button>
+                        {[{ label: 'Hoy', days: 1 }, { label: 'Ayer', days: 2 }, { label: '7 días', days: 7 }, { label: '30 días', days: 30 }].map(p => (
+                            <Button key={p.label} variant="outline" size="sm" className="h-7 text-xs" onClick={() => applyPreset(p.days)}>{p.label}</Button>
                         ))}
                     </div>
 
-                    {/* Date range + user filter */}
+                    {/* Date + SDR + Tipo + Sheet */}
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="space-y-1">
                             <p className="text-xs text-muted-foreground font-medium">Desde</p>
-                            <Input
-                                type="date"
-                                className="h-8 w-36 text-sm"
-                                value={pendingDesde}
-                                max={pendingHasta}
-                                onChange={e => setPendingDesde(e.target.value)}
-                            />
+                            <Input type="date" className="h-8 w-36 text-sm" value={pendingDesde} max={pendingHasta} onChange={e => setPendingDesde(e.target.value)} />
                         </div>
                         <div className="space-y-1">
                             <p className="text-xs text-muted-foreground font-medium">Hasta</p>
-                            <Input
-                                type="date"
-                                className="h-8 w-36 text-sm"
-                                value={pendingHasta}
-                                min={pendingDesde}
-                                onChange={e => setPendingHasta(e.target.value)}
-                            />
+                            <Input type="date" className="h-8 w-36 text-sm" value={pendingHasta} min={pendingDesde} onChange={e => setPendingHasta(e.target.value)} />
                         </div>
-                        <Button size="sm" className="h-8" onClick={applyDateFilter}>
-                            Aplicar fechas
-                        </Button>
+                        <Button size="sm" className="h-8" onClick={applyDateFilter}>Aplicar fechas</Button>
 
                         <div className="space-y-1">
                             <p className="text-xs text-muted-foreground font-medium">SDR</p>
                             <Select value={usuarioId || '__all'} onValueChange={v => { setUsuarioId(v === '__all' ? '' : v); setPage(1); }}>
-                                <SelectTrigger className="h-8 w-52 text-sm">
-                                    <SelectValue />
-                                </SelectTrigger>
+                                <SelectTrigger className="h-8 w-52 text-sm"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="__all">Todos los usuarios</SelectItem>
+                                    <SelectItem value="__all">Todos los SDRs</SelectItem>
                                     {sdrs.map(s => (
                                         <SelectItem key={s.id} value={s.id}>
-                                            {s.email || s.id}
+                                            {s.nombre || s.email}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground font-medium">Tipo</p>
+                            <Select value={tipoFilter} onValueChange={v => { setTipoFilter(v as any); setPage(1); }}>
+                                <SelectTrigger className="h-8 w-40 text-sm"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos</SelectItem>
+                                    <SelectItem value="captures">Solo capturas</SelectItem>
+                                    <SelectItem value="credits">Solo créditos</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {sheetNames.length > 0 && (
+                            <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground font-medium">Sheet</p>
+                                <Select value={sheetNameFilter || '__all'} onValueChange={v => { setSheetNameFilter(v === '__all' ? '' : v); setPage(1); }}>
+                                    <SelectTrigger className="h-8 w-48 text-sm"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__all">Todos los sheets</SelectItem>
+                                        {sheetNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
@@ -306,22 +288,16 @@ export default function Historial() {
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3 pb-3">
                     <div>
-                        <CardTitle>Registros</CardTitle>
+                        <CardTitle>Resultados</CardTitle>
                         <CardDescription>
-                            {loadingData
-                                ? 'Cargando...'
-                                : total === 0
-                                    ? 'Sin resultados'
-                                    : `Mostrando ${(page - 1) * limit + 1}–${Math.min(page * limit, total)} de ${total} registros`
-                            }
+                            {loadingData ? 'Cargando...' : total === 0 ? 'Sin resultados'
+                                : `Mostrando ${(page - 1) * limit + 1}–${Math.min(page * limit, total)} de ${total} registros`}
                         </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Por página:</span>
                         <Select value={String(limit)} onValueChange={v => { setLimit(Number(v)); setPage(1); }}>
-                            <SelectTrigger className="h-7 w-16 text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
+                            <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="25">25</SelectItem>
                                 <SelectItem value="50">50</SelectItem>
@@ -335,7 +311,9 @@ export default function Historial() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="pl-6">Fecha</TableHead>
-                                <TableHead>Usuario (SDR)</TableHead>
+                                <TableHead>Prospecto</TableHead>
+                                <TableHead>SDR</TableHead>
+                                <TableHead>Sheet</TableHead>
                                 <TableHead className="text-right">Apollo</TableHead>
                                 <TableHead className="text-right pr-6">Verifier</TableHead>
                             </TableRow>
@@ -343,59 +321,126 @@ export default function Historial() {
                         <TableBody>
                             {loadingData ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground animate-pulse">
-                                        Cargando...
-                                    </TableCell>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
                                 </TableRow>
                             ) : data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
-                                        Sin registros para los filtros seleccionados.
-                                    </TableCell>
+                                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
                                 </TableRow>
                             ) : (
-                                data.map(c => (
-                                    <TableRow key={c.id}>
-                                        <TableCell className="pl-6 text-sm text-muted-foreground whitespace-nowrap">
-                                            {new Date(c.fecha).toLocaleString('es-CL', {
-                                                day: '2-digit', month: '2-digit', year: 'numeric',
-                                                hour: '2-digit', minute: '2-digit'
-                                            })}
-                                        </TableCell>
-                                        <TableCell className="text-sm">{c.usuario?.email ?? c.usuario_id}</TableCell>
-                                        <TableCell className="text-right">
-                                            {c.creditos_apollo > 0
-                                                ? <Badge variant="secondary">{c.creditos_apollo}</Badge>
-                                                : <span className="text-muted-foreground text-sm">—</span>
-                                            }
-                                        </TableCell>
-                                        <TableCell className="text-right pr-6">
-                                            {c.creditos_verifier > 0
-                                                ? <Badge variant="outline">{c.creditos_verifier}</Badge>
-                                                : <span className="text-muted-foreground text-sm">—</span>
-                                            }
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                data.map(c => {
+                                    const ld = c.lead_data;
+                                    const sdr = sdrMap.get(c.usuario_id);
+                                    const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || c.usuario_id;
+                                    const isCapture = !!ld;
+                                    return (
+                                        <TableRow
+                                            key={c.id}
+                                            className={isCapture ? 'cursor-pointer hover:bg-muted/50' : ''}
+                                            onClick={isCapture ? () => { setSelectedLead(ld!); setPanelOpen(true); } : undefined}
+                                        >
+                                            <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
+                                                {new Date(c.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </TableCell>
+                                            <TableCell>
+                                                {isCapture ? (
+                                                    <div>
+                                                        <p className="text-sm font-medium leading-tight">
+                                                            {ld!.full_name || `${ld!.first_name || ''} ${ld!.last_name || ''}`.trim() || '—'}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">{ld!.primary_email || ''}</p>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground italic">Solo créditos</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1.5">
+                                                    {sdr?.avatar_url
+                                                        ? <img src={sdr.avatar_url} className="h-5 w-5 rounded-full object-cover shrink-0" alt="" />
+                                                        : <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">{(sdrLabel).charAt(0).toUpperCase()}</div>
+                                                    }
+                                                    <span className="text-sm truncate max-w-[140px]">{sdrLabel}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">{c.sheet_name || '—'}</TableCell>
+                                            <TableCell className="text-right">
+                                                {c.creditos_apollo > 0 ? <Badge variant="secondary">{c.creditos_apollo}</Badge> : <span className="text-muted-foreground text-sm">—</span>}
+                                            </TableCell>
+                                            <TableCell className="text-right pr-6">
+                                                {c.creditos_verifier > 0 ? <Badge variant="outline">{c.creditos_verifier}</Badge> : <span className="text-muted-foreground text-sm">—</span>}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                     </Table>
 
-                    {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="flex items-center justify-between px-6 py-4 border-t">
-                            <p className="text-xs text-muted-foreground">
-                                Página {page} de {totalPages}
-                            </p>
-                            <Pagination
-                                page={page}
-                                totalPages={totalPages}
-                                onChange={p => setPage(p)}
-                            />
+                            <p className="text-xs text-muted-foreground">Página {page} de {totalPages}</p>
+                            <Pagination page={page} totalPages={totalPages} onChange={p => setPage(p)} />
                         </div>
                     )}
                 </CardContent>
             </Card>
+
+            {/* Detail panel */}
+            <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
+                <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
+                    {selectedLead && (
+                        <>
+                            <SheetHeader>
+                                <SheetTitle>{selectedLead.full_name || `${selectedLead.first_name || ''} ${selectedLead.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
+                                <SheetDescription className="flex flex-wrap gap-1.5 items-center">
+                                    {selectedLead.title && <span>{selectedLead.title}</span>}
+                                    {selectedLead.company_name && <span>· {selectedLead.company_name}</span>}
+                                </SheetDescription>
+                                <div className="mt-1"><EmailStatusBadge status={selectedLead.email_status} /></div>
+                            </SheetHeader>
+                            <div className="px-6 pb-6 space-y-4">
+                                <Separator />
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
+                                    <dl className="space-y-1.5 text-sm">
+                                        {selectedLead.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email principal</dt><dd className="font-medium break-all">{selectedLead.primary_email}</dd></div>}
+                                        {selectedLead.personal_email && selectedLead.personal_email !== selectedLead.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email personal</dt><dd className="break-all">{selectedLead.personal_email}</dd></div>}
+                                        {selectedLead.phone_number && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt><dd>{selectedLead.phone_number}</dd></div>}
+                                    </dl>
+                                </div>
+                                <Separator />
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
+                                    <dl className="space-y-1.5 text-sm">
+                                        {selectedLead.company_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{selectedLead.company_name}</dd></div>}
+                                        {selectedLead.company_domain && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Dominio</dt><dd>{selectedLead.company_domain}</dd></div>}
+                                        {selectedLead.industry && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Industria</dt><dd>{selectedLead.industry}</dd></div>}
+                                        {selectedLead.location && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt><dd>{selectedLead.location}</dd></div>}
+                                    </dl>
+                                </div>
+                                {selectedLead.linkedin_url && (
+                                    <>
+                                        <Separator />
+                                        <a href={selectedLead.linkedin_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline">
+                                            <ExternalLink className="h-3.5 w-3.5" />Ver perfil LinkedIn
+                                        </a>
+                                    </>
+                                )}
+                                <Separator />
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
+                                    <dl className="space-y-1.5 text-sm">
+                                        {selectedLead.sdr_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{selectedLead.sdr_name}</dd></div>}
+                                        {selectedLead.sdr_mail && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email</dt><dd className="break-all">{selectedLead.sdr_mail}</dd></div>}
+                                        {selectedLead.created_at && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Capturado</dt><dd>{new Date(selectedLead.created_at).toLocaleString('es-CL')}</dd></div>}
+                                    </dl>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }

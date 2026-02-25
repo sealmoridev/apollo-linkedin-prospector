@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
-import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumos, getConsumoHistorial, getConsumoSheetNames } from '../lib/api';
-import type { EmpresaDetail, ExtensionUser, Consumo, LeadData } from '../lib/api';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumos, getConsumoHistorial } from '../lib/api';
+import type { EmpresaDetail, ExtensionUser, Consumo } from '../lib/api';
 import { useActiveEmpresa } from '../ActiveEmpresaContext';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
@@ -9,14 +9,11 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
-import { Separator } from '../components/ui/separator';
 import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
     CartesianGrid, Tooltip
 } from 'recharts';
-import { Users, Zap, CheckCircle, Activity, RefreshCw, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -75,6 +72,8 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function MiEmpresa() {
     const { id: empresaId } = useParams<{ id?: string }>();
     const { setActiveEmpresa } = useActiveEmpresa();
+    const navigate = useNavigate();
+
     const [empresa, setEmpresa] = useState<EmpresaDetail | null>(null);
     const [usuarios, setUsuarios] = useState<ExtensionUser[]>([]);
     const [consumos, setConsumos] = useState<Consumo[]>([]);
@@ -82,16 +81,9 @@ export default function MiEmpresa() {
     const [loadingConsumos, setLoadingConsumos] = useState(false);
     const [refreshingUsuarios, setRefreshingUsuarios] = useState(false);
 
-    // Historial de capturas
-    const [historialLeads, setHistorialLeads] = useState<Consumo[]>([]);
-    const [historialTotal, setHistorialTotal] = useState(0);
-    const [historialPage, setHistorialPage] = useState(1);
-    const [historialTotalPages, setHistorialTotalPages] = useState(1);
-    const [historialLoading, setHistorialLoading] = useState(false);
-    const [selectedLead, setSelectedLead] = useState<LeadData | null>(null);
-    const [sheetPanelOpen, setSheetPanelOpen] = useState(false);
-    const [sheetNames, setSheetNames] = useState<string[]>([]);
-    const [sheetNameFilter, setSheetNameFilter] = useState<string>('');
+    // Últimas capturas (preview)
+    const [lastCaptures, setLastCaptures] = useState<Consumo[]>([]);
+    const [loadingCaptures, setLoadingCaptures] = useState(false);
 
     // Date range
     const [preset, setPreset] = useState<RangePreset>('7d');
@@ -99,7 +91,7 @@ export default function MiEmpresa() {
     const [customHasta, setCustomHasta] = useState(toISO(new Date()));
     const [appliedRange, setAppliedRange] = useState(() => presetRange('7d'));
 
-    // Clear empresa context on unmount (SuperAdmin leaving empresa view)
+    // Clear empresa context on unmount
     useEffect(() => {
         return () => { if (empresaId) setActiveEmpresa(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,7 +100,6 @@ export default function MiEmpresa() {
     // Initial load
     useEffect(() => {
         const fetchEmpresa = empresaId ? getEmpresa(empresaId) : getMiEmpresa();
-
         fetchEmpresa
             .then(emp => {
                 setEmpresa(emp);
@@ -137,35 +128,16 @@ export default function MiEmpresa() {
             .finally(() => setLoadingConsumos(false));
     }, [empresa, appliedRange]);
 
-    // Load sheet names for historial filter
+    // Load last 10 captures for preview
     useEffect(() => {
         if (!empresa) return;
-        getConsumoSheetNames(empresa.id)
-            .then(setSheetNames)
-            .catch(() => { /* silently ignore */ });
+        setLoadingCaptures(true);
+        getConsumoHistorial({ empresa_id: empresa.id, only_leads: true, limit: 10, page: 1 })
+            .then(r => setLastCaptures(r.data))
+            .catch(() => {})
+            .finally(() => setLoadingCaptures(false));
     }, [empresa]);
 
-    // Load historial leads
-    useEffect(() => {
-        if (!empresa) return;
-        setHistorialLoading(true);
-        getConsumoHistorial({
-            empresa_id: empresa.id,
-            only_leads: true,
-            sheet_name: sheetNameFilter || undefined,
-            page: historialPage,
-            limit: 20
-        })
-            .then(result => {
-                setHistorialLeads(result.data);
-                setHistorialTotal(result.total);
-                setHistorialTotalPages(result.totalPages);
-            })
-            .catch(() => toast.error('Error al cargar historial de capturas'))
-            .finally(() => setHistorialLoading(false));
-    }, [empresa, sheetNameFilter, historialPage]);
-
-    // Apply a preset
     const applyPreset = (p: Exclude<RangePreset, 'custom'>) => {
         setPreset(p);
         setAppliedRange(presetRange(p));
@@ -182,10 +154,7 @@ export default function MiEmpresa() {
 
     const applyCustom = () => {
         if (!customDesde || !customHasta) return;
-        if (customDesde > customHasta) {
-            toast.error('La fecha "desde" debe ser anterior a "hasta"');
-            return;
-        }
+        if (customDesde > customHasta) { toast.error('La fecha "desde" debe ser anterior a "hasta"'); return; }
         setAppliedRange({ desde: customDesde, hasta: customHasta });
     };
 
@@ -205,7 +174,6 @@ export default function MiEmpresa() {
             prev.apollo += c.creditos_apollo;
             byDate.set(date, prev);
         });
-        // Fill all dates in range with 0
         return fillDateRange(appliedRange.desde, appliedRange.hasta).map(date => ({
             date,
             extracciones: byDate.get(date)?.extracciones ?? 0,
@@ -213,36 +181,27 @@ export default function MiEmpresa() {
         }));
     }, [consumos, appliedRange]);
 
-    const userBreakdown = useMemo(() => {
-        const byUser = new Map<string, { email: string; extracciones: number; apollo: number; verifier: number }>();
+    // Ranking SDR: fusiona actividad del período + datos de perfil
+    const sdrRanking = useMemo(() => {
+        const usuarioMap = new Map(usuarios.map(u => [u.id, u]));
+        const byId = new Map<string, { id: string; extracciones: number; apollo: number; verifier: number }>();
         consumos.forEach(c => {
-            const email = c.usuario?.email ?? c.usuario_id;
-            const prev = byUser.get(email) || { email, extracciones: 0, apollo: 0, verifier: 0 };
+            const prev = byId.get(c.usuario_id) || { id: c.usuario_id, extracciones: 0, apollo: 0, verifier: 0 };
             prev.extracciones += 1;
             prev.apollo += c.creditos_apollo;
             prev.verifier += c.creditos_verifier;
-            byUser.set(email, prev);
+            byId.set(c.usuario_id, prev);
         });
-        return Array.from(byUser.values()).sort((a, b) => b.extracciones - a.extracciones);
-    }, [consumos]);
+        // Agregar SDRs registrados sin actividad en el período
+        usuarios.forEach(u => {
+            if (!byId.has(u.id)) byId.set(u.id, { id: u.id, extracciones: 0, apollo: 0, verifier: 0 });
+        });
+        return Array.from(byId.values())
+            .sort((a, b) => b.extracciones - a.extracciones)
+            .map(r => ({ ...r, sdr: usuarioMap.get(r.id) }));
+    }, [consumos, usuarios]);
 
-    const handleSheetNameFilterChange = (val: string) => {
-        setSheetNameFilter(val === '__all__' ? '' : val);
-        setHistorialPage(1);
-    };
-
-    const openLeadPanel = (lead: LeadData) => {
-        setSelectedLead(lead);
-        setSheetPanelOpen(true);
-    };
-
-    const emailStatusBadge = (status: string | null) => {
-        if (!status) return <Badge variant="outline">Sin verificar</Badge>;
-        const statusMap: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
-        const label = statusMap[status] || status;
-        const variant = status === 'valid' ? 'default' : status === 'invalid' ? 'destructive' : 'secondary';
-        return <Badge variant={variant as any}>{label}</Badge>;
-    };
+    const registrosRoute = empresaId ? `/empresas/${empresaId}/historial` : '/historial';
 
     // ─ Render ─────────────────────────────────────────────────────────────────
 
@@ -285,47 +244,22 @@ export default function MiEmpresa() {
             {/* Date range selector */}
             <div className="flex flex-wrap items-center gap-2">
                 {presets.map(p => (
-                    <Button
-                        key={p.key}
-                        variant={preset === p.key ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => applyPreset(p.key)}
-                    >
+                    <Button key={p.key} variant={preset === p.key ? 'default' : 'outline'} size="sm" onClick={() => applyPreset(p.key)}>
                         {p.label}
                     </Button>
                 ))}
-                <Button
-                    variant={preset === 'custom' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPreset('custom')}
-                >
+                <Button variant={preset === 'custom' ? 'default' : 'outline'} size="sm" onClick={() => setPreset('custom')}>
                     Personalizado
                 </Button>
-
                 {preset === 'custom' && (
                     <div className="flex items-center gap-2 ml-1">
-                        <Input
-                            type="date"
-                            className="h-8 w-36 text-sm"
-                            value={customDesde}
-                            max={customHasta}
-                            onChange={e => setCustomDesde(e.target.value)}
-                        />
+                        <Input type="date" className="h-8 w-36 text-sm" value={customDesde} max={customHasta} onChange={e => setCustomDesde(e.target.value)} />
                         <span className="text-muted-foreground text-sm">→</span>
-                        <Input
-                            type="date"
-                            className="h-8 w-36 text-sm"
-                            value={customHasta}
-                            min={customDesde}
-                            onChange={e => setCustomHasta(e.target.value)}
-                        />
+                        <Input type="date" className="h-8 w-36 text-sm" value={customHasta} min={customDesde} onChange={e => setCustomHasta(e.target.value)} />
                         <Button size="sm" onClick={applyCustom}>Aplicar</Button>
                     </div>
                 )}
-
-                {loadingConsumos && (
-                    <span className="text-xs text-muted-foreground animate-pulse ml-1">Actualizando...</span>
-                )}
+                {loadingConsumos && <span className="text-xs text-muted-foreground animate-pulse ml-1">Actualizando...</span>}
             </div>
 
             {/* Summary cards */}
@@ -392,154 +326,107 @@ export default function MiEmpresa() {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis
-                                    dataKey="date"
-                                    tickFormatter={formatAxisDate}
+                                <XAxis dataKey="date" tickFormatter={formatAxisDate}
                                     tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                                    tickLine={false}
-                                    axisLine={false}
-                                    interval={Math.max(0, Math.floor(chartData.length / 8) - 1)}
-                                />
-                                <YAxis
-                                    allowDecimals={false}
+                                    tickLine={false} axisLine={false}
+                                    interval={Math.max(0, Math.floor(chartData.length / 8) - 1)} />
+                                <YAxis allowDecimals={false}
                                     tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                                    tickLine={false}
-                                    axisLine={false}
-                                />
+                                    tickLine={false} axisLine={false} />
                                 <Tooltip content={<ChartTooltip />} />
-                                <Area
-                                    type="monotone"
-                                    dataKey="extracciones"
-                                    name="Extracciones"
-                                    stroke="hsl(var(--primary))"
-                                    strokeWidth={2}
-                                    fill="url(#gradExt)"
-                                    dot={false}
-                                    activeDot={{ r: 4 }}
-                                />
+                                <Area type="monotone" dataKey="extracciones" name="Extracciones"
+                                    stroke="hsl(var(--primary))" strokeWidth={2}
+                                    fill="url(#gradExt)" dot={false} activeDot={{ r: 4 }} />
                             </AreaChart>
                         </ResponsiveContainer>
                     )}
                 </CardContent>
             </Card>
 
-            {/* User breakdown */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Actividad por SDR</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {userBreakdown.length === 0 ? (
-                        <p className="text-center text-sm text-muted-foreground py-8">
-                            Sin actividad en el período seleccionado.
-                        </p>
-                    ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>SDR</TableHead>
-                                    <TableHead className="text-right">Extracciones</TableHead>
-                                    <TableHead className="text-right">Apollo</TableHead>
-                                    <TableHead className="text-right">Verifier</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {userBreakdown.map(u => (
-                                    <TableRow key={u.email}>
-                                        <TableCell className="font-medium">{u.email}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Badge variant="secondary">{u.extracciones}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right text-sm">{u.apollo}</TableCell>
-                                        <TableCell className="text-right text-sm">{u.verifier}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* SDRs registrados */}
+            {/* SDR Ranking — fusiona actividad + perfil */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <CardTitle>SDRs registrados ({usuarios.length})</CardTitle>
+                    <div>
+                        <CardTitle>Ranking de SDRs</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">{usuarios.length} registrados · ordenados por extracciones en el período</p>
+                    </div>
                     <Button variant="ghost" size="sm" onClick={refreshUsuarios} disabled={refreshingUsuarios} className="h-8 w-8 p-0">
                         <RefreshCw className={`h-4 w-4 ${refreshingUsuarios ? 'animate-spin' : ''}`} />
                     </Button>
                 </CardHeader>
                 <CardContent>
-                    {usuarios.length === 0 ? (
-                        <p className="text-center text-sm text-muted-foreground py-6">
-                            Aún no hay SDRs conectados.
-                        </p>
+                    {sdrRanking.length === 0 ? (
+                        <p className="text-center text-sm text-muted-foreground py-6">Aún no hay SDRs registrados.</p>
                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>#</TableHead>
                                     <TableHead>SDR</TableHead>
-                                    <TableHead className="text-right">Búsquedas totales</TableHead>
-                                    <TableHead>Desde</TableHead>
+                                    <TableHead className="text-right">Extracciones</TableHead>
+                                    <TableHead className="text-right">Apollo</TableHead>
+                                    <TableHead className="text-right">Verifier</TableHead>
+                                    <TableHead className="text-right">Desde</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {usuarios.map(u => (
-                                    <TableRow key={u.id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2.5">
-                                                {u.avatar_url
-                                                    ? <img src={u.avatar_url} alt={u.nombre || u.email} className="h-7 w-7 rounded-full object-cover shrink-0" />
-                                                    : <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                                                        {(u.nombre || u.email).charAt(0).toUpperCase()}
-                                                      </div>
-                                                }
-                                                <div>
-                                                    {u.nombre && <p className="text-sm font-medium leading-none">{u.nombre}</p>}
-                                                    <p className={`text-muted-foreground ${u.nombre ? 'text-xs mt-0.5' : 'text-sm font-medium'}`}>{u.email}</p>
+                                {sdrRanking.map((r, i) => {
+                                    const u = r.sdr;
+                                    const displayName = u?.nombre || u?.email || r.id;
+                                    const displayEmail = u?.nombre ? u.email : undefined;
+                                    return (
+                                        <TableRow key={r.id}>
+                                            <TableCell className="text-muted-foreground font-medium w-8">
+                                                {i + 1}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2.5">
+                                                    {u?.avatar_url
+                                                        ? <img src={u.avatar_url} alt={displayName} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                                                        : <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                                                            {displayName.charAt(0).toUpperCase()}
+                                                          </div>
+                                                    }
+                                                    <div>
+                                                        <p className="text-sm font-medium leading-none">{displayName}</p>
+                                                        {displayEmail && <p className="text-xs text-muted-foreground mt-0.5">{displayEmail}</p>}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Badge variant="outline">{u._count.consumos}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {new Date(u.createdAt).toLocaleDateString('es-CL')}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Badge variant={r.extracciones > 0 ? 'secondary' : 'outline'}>{r.extracciones}</Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm">{r.apollo || '—'}</TableCell>
+                                            <TableCell className="text-right text-sm">{r.verifier || '—'}</TableCell>
+                                            <TableCell className="text-right text-sm text-muted-foreground">
+                                                {u?.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : '—'}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     )}
                 </CardContent>
             </Card>
 
-            {/* Historial de Capturas */}
+            {/* Últimas capturas — preview */}
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-3">
                     <div>
-                        <CardTitle>Historial de Capturas</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-1">Leads guardados en Google Sheets ({historialTotal})</p>
+                        <CardTitle>Últimas capturas</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">Leads guardados recientemente en Google Sheets</p>
                     </div>
-                    {sheetNames.length > 0 && (
-                        <Select value={sheetNameFilter || '__all__'} onValueChange={handleSheetNameFilterChange}>
-                            <SelectTrigger className="w-48 h-8 text-sm">
-                                <SelectValue placeholder="Todos los sheets" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__all__">Todos los sheets</SelectItem>
-                                {sheetNames.map(name => (
-                                    <SelectItem key={name} value={name}>{name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
+                    <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(registrosRoute)}>
+                        Ver más <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
                 </CardHeader>
                 <CardContent>
-                    {historialLoading ? (
-                        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground animate-pulse">Cargando...</div>
-                    ) : historialLeads.length === 0 ? (
-                        <p className="text-center text-sm text-muted-foreground py-8">
-                            No hay capturas registradas aún.
+                    {loadingCaptures ? (
+                        <div className="flex h-24 items-center justify-center text-sm text-muted-foreground animate-pulse">Cargando...</div>
+                    ) : lastCaptures.length === 0 ? (
+                        <p className="text-center text-sm text-muted-foreground py-6">
+                            Aún no hay leads capturados en sheets.
                         </p>
                     ) : (
                         <>
@@ -549,20 +436,18 @@ export default function MiEmpresa() {
                                         <TableHead>Fecha</TableHead>
                                         <TableHead>Nombre</TableHead>
                                         <TableHead>Email</TableHead>
-                                        <TableHead>Título</TableHead>
+                                        <TableHead>SDR</TableHead>
                                         <TableHead>Empresa</TableHead>
                                         <TableHead>Sheet</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {historialLeads.map(c => {
+                                    {lastCaptures.map(c => {
                                         const ld = c.lead_data!;
+                                        const sdr = usuarios.find(u => u.id === c.usuario_id);
+                                        const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || '—';
                                         return (
-                                            <TableRow
-                                                key={c.id}
-                                                className="cursor-pointer hover:bg-muted/50"
-                                                onClick={() => openLeadPanel(ld)}
-                                            >
+                                            <TableRow key={c.id}>
                                                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                                     {new Date(c.fecha).toLocaleDateString('es-CL')}
                                                 </TableCell>
@@ -572,177 +457,31 @@ export default function MiEmpresa() {
                                                 <TableCell className="text-sm text-muted-foreground">
                                                     {ld.primary_email || '—'}
                                                 </TableCell>
-                                                <TableCell className="text-sm text-muted-foreground">
-                                                    {ld.title || '—'}
+                                                <TableCell>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {sdr?.avatar_url
+                                                            ? <img src={sdr.avatar_url} className="h-5 w-5 rounded-full object-cover shrink-0" alt="" />
+                                                            : <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">{sdrLabel.charAt(0).toUpperCase()}</div>
+                                                        }
+                                                        <span className="text-sm truncate max-w-[120px]">{sdrLabel}</span>
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell className="text-sm text-muted-foreground">
-                                                    {ld.company_name || '—'}
-                                                </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground">
-                                                    {c.sheet_name || '—'}
-                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">{ld.company_name || '—'}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">{c.sheet_name || '—'}</TableCell>
                                             </TableRow>
                                         );
                                     })}
                                 </TableBody>
                             </Table>
-
-                            {/* Paginación */}
-                            {historialTotalPages > 1 && (
-                                <div className="flex items-center justify-between mt-4">
-                                    <span className="text-xs text-muted-foreground">
-                                        Página {historialPage} de {historialTotalPages}
-                                    </span>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            variant="outline" size="sm"
-                                            disabled={historialPage <= 1}
-                                            onClick={() => setHistorialPage(p => p - 1)}
-                                        >
-                                            <ChevronLeft className="h-3 w-3" />
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm"
-                                            disabled={historialPage >= historialTotalPages}
-                                            onClick={() => setHistorialPage(p => p + 1)}
-                                        >
-                                            <ChevronRight className="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+                            <div className="pt-3 flex justify-end">
+                                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(registrosRoute)}>
+                                    Ver todos los registros <ArrowRight className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
                         </>
                     )}
                 </CardContent>
             </Card>
-
-            {/* Panel lateral de detalle del lead */}
-            <Sheet open={sheetPanelOpen} onOpenChange={setSheetPanelOpen}>
-                <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
-                    {selectedLead && (
-                        <>
-                            <SheetHeader>
-                                <SheetTitle>{selectedLead.full_name || `${selectedLead.first_name || ''} ${selectedLead.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
-                                <SheetDescription className="flex items-center gap-2 flex-wrap">
-                                    {selectedLead.title && <span>{selectedLead.title}</span>}
-                                    {selectedLead.company_name && <span>· {selectedLead.company_name}</span>}
-                                </SheetDescription>
-                                <div className="mt-1">{emailStatusBadge(selectedLead.email_status)}</div>
-                            </SheetHeader>
-
-                            <div className="px-6 pb-6 space-y-4">
-                                <Separator />
-
-                                {/* Contacto */}
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
-                                    <dl className="space-y-1.5 text-sm">
-                                        {selectedLead.primary_email && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Email principal</dt>
-                                                <dd className="font-medium break-all">{selectedLead.primary_email}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.personal_email && selectedLead.personal_email !== selectedLead.primary_email && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Email personal</dt>
-                                                <dd className="break-all">{selectedLead.personal_email}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.phone_number && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt>
-                                                <dd>{selectedLead.phone_number}</dd>
-                                            </div>
-                                        )}
-                                    </dl>
-                                </div>
-
-                                <Separator />
-
-                                {/* Empresa */}
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
-                                    <dl className="space-y-1.5 text-sm">
-                                        {selectedLead.company_name && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Nombre</dt>
-                                                <dd className="font-medium">{selectedLead.company_name}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.company_domain && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Dominio</dt>
-                                                <dd>{selectedLead.company_domain}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.industry && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Industria</dt>
-                                                <dd>{selectedLead.industry}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.location && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt>
-                                                <dd>{selectedLead.location}</dd>
-                                            </div>
-                                        )}
-                                    </dl>
-                                </div>
-
-                                {selectedLead.linkedin_url && (
-                                    <>
-                                        <Separator />
-                                        <a
-                                            href={selectedLead.linkedin_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                                        >
-                                            <ExternalLink className="h-3.5 w-3.5" />
-                                            Ver perfil LinkedIn
-                                        </a>
-                                    </>
-                                )}
-
-                                <Separator />
-
-                                {/* SDR */}
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
-                                    <dl className="space-y-1.5 text-sm">
-                                        {selectedLead.sdr_name && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Nombre</dt>
-                                                <dd className="font-medium">{selectedLead.sdr_name}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.sdr_mail && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Email</dt>
-                                                <dd className="break-all">{selectedLead.sdr_mail}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.sdr_id && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">ID</dt>
-                                                <dd className="text-muted-foreground text-xs">{selectedLead.sdr_id}</dd>
-                                            </div>
-                                        )}
-                                        {selectedLead.created_at && (
-                                            <div className="flex gap-2">
-                                                <dt className="text-muted-foreground w-28 shrink-0">Capturado</dt>
-                                                <dd>{new Date(selectedLead.created_at).toLocaleString('es-CL')}</dd>
-                                            </div>
-                                        )}
-                                    </dl>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </SheetContent>
-            </Sheet>
         </div>
     );
 }
