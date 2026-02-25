@@ -222,23 +222,36 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
             })
         ]);
 
-        // Enrich lead captures with credit totals from their sesion
-        const sesionIds = data
-            .map((c: any) => c.sesion_id)
-            .filter((id: any) => !!id) as string[];
+        // Enrich lead captures with credit totals from their sesion_id.
+        // Uses findMany + manual aggregation instead of groupBy to avoid
+        // Prisma quirks with Json? fields in where/groupBy clauses.
+        const sesionIds = [...new Set(
+            data.map((c: any) => c.sesion_id).filter((id: any) => !!id)
+        )] as string[];
 
         const sesionCreditsMap = new Map<string, { apollo: number; verifier: number }>();
         if (sesionIds.length > 0) {
-            const creditGroups = await (prisma.consumo as any).groupBy({
-                by: ['sesion_id'],
-                where: { sesion_id: { in: sesionIds }, lead_data: null },
-                _sum: { creditos_apollo: true, creditos_verifier: true }
-            });
-            for (const g of creditGroups) {
-                sesionCreditsMap.set(g.sesion_id, {
-                    apollo: g._sum.creditos_apollo ?? 0,
-                    verifier: g._sum.creditos_verifier ?? 0
+            try {
+                const creditRecords = await prisma.consumo.findMany({
+                    where: {
+                        sesion_id: { in: sesionIds },
+                        OR: [
+                            { creditos_apollo: { gt: 0 } },
+                            { creditos_verifier: { gt: 0 } }
+                        ]
+                    },
+                    select: { sesion_id: true, creditos_apollo: true, creditos_verifier: true }
                 });
+                for (const r of creditRecords) {
+                    if (!r.sesion_id) continue;
+                    const prev = sesionCreditsMap.get(r.sesion_id) ?? { apollo: 0, verifier: 0 };
+                    prev.apollo += r.creditos_apollo;
+                    prev.verifier += r.creditos_verifier;
+                    sesionCreditsMap.set(r.sesion_id, prev);
+                }
+            } catch (enrichErr) {
+                // Non-fatal: historial still returns without sesion credit totals
+                console.error('[Admin API] Sesion credit enrichment failed:', enrichErr);
             }
         }
 
