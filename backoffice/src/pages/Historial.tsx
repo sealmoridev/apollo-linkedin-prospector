@@ -56,16 +56,6 @@ function Pagination({ page, totalPages, onChange }: PaginationProps) {
     );
 }
 
-// ─── Email status badge ───────────────────────────────────────────────────────
-
-function EmailStatusBadge({ status }: { status: string | null }) {
-    if (!status) return <Badge variant="outline" className="text-[10px]">Sin verificar</Badge>;
-    const map: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
-    const label = map[status] || status;
-    const variant = status === 'valid' ? 'default' : status === 'invalid' ? 'destructive' : 'secondary';
-    return <Badge variant={variant as any} className="text-[10px]">{label}</Badge>;
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Historial() {
