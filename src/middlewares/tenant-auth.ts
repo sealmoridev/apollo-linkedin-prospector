@@ -61,13 +61,43 @@ export const tenantAuthMiddleware = async (req: Request, res: Response, next: Ne
             // Intentar usar el perfil de Google guardado en tokenStorage
             const { tokenStorage } = await import('../services/token-storage');
             const storedToken = tokenStorage.getToken(googleId);
-            const profile = storedToken?.googleProfile;
 
-            const resolvedEmail = profile?.email || email;
-            if (!resolvedEmail) {
+            if (!storedToken) {
                 return res.status(400).json({
                     error: 'Bad Request',
                     message: 'User not registered. Connect Google first via /api/auth/google.'
+                });
+            }
+
+            let profile = storedToken.googleProfile;
+
+            // Token antiguo sin perfil: re-obtener desde Google usando las credenciales guardadas
+            if (!profile) {
+                try {
+                    const { google } = await import('googleapis');
+                    const { SheetsService } = await import('../services/sheets-service');
+                    const sheetsService = new SheetsService();
+                    const oauth2Client = sheetsService.getOAuthClient();
+                    oauth2Client.setCredentials({
+                        access_token: storedToken.accessToken,
+                        refresh_token: storedToken.refreshToken,
+                    });
+                    const oauth2Api = google.oauth2({ version: 'v2', auth: oauth2Client });
+                    const { data } = await oauth2Api.userinfo.get();
+                    if (data.email) {
+                        profile = { email: data.email, nombre: data.name || data.email, avatar_url: data.picture || '' };
+                        tokenStorage.setToken(googleId, { ...storedToken, googleProfile: profile });
+                    }
+                } catch (e) {
+                    console.warn('[TenantAuthMiddleware] Could not re-fetch Google profile:', e);
+                }
+            }
+
+            const resolvedEmail = profile?.email;
+            if (!resolvedEmail) {
+                return res.status(400).json({
+                    error: 'Bad Request',
+                    message: 'Could not resolve user email. Please reconnect Google via /api/auth/google.'
                 });
             }
 
