@@ -181,7 +181,7 @@ router.get('/consumos', requireAdmin, async (req: Request, res: Response) => {
 router.get('/consumos/historial', requireAdmin, async (req: Request, res: Response) => {
     try {
         const { role, empresa_id } = req.adminUser!;
-        const { empresa_id: qEmpresaId, desde, hasta, usuario_id, page = '1', limit = '50', sheet_name, only_leads } = req.query;
+        const { empresa_id: qEmpresaId, desde, hasta, usuario_id, page = '1', limit = '50', sheet_name, only_leads, search } = req.query;
 
         const filter: any = {};
         if (role !== 'SUPERADMIN') {
@@ -204,8 +204,22 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
         if (sheet_name) filter.sheet_name = sheet_name as string;
         if (only_leads === 'true') filter.lead_data = { not: null };
 
+        if (search && typeof search === 'string' && search.trim()) {
+            const s = search.trim();
+            const orConditions: any[] = [
+                { sheet_name: { contains: s, mode: 'insensitive' } },
+                { usuario: { email: { contains: s, mode: 'insensitive' } } },
+                { usuario: { nombre: { contains: s, mode: 'insensitive' } } },
+                { lead_data: { path: ['full_name'], string_contains: s } },
+                { lead_data: { path: ['primary_email'], string_contains: s } },
+                { lead_data: { path: ['company_name'], string_contains: s } },
+                { lead_data: { path: ['title'], string_contains: s } },
+            ];
+            filter.AND = [...(filter.AND || []), { OR: orConditions }];
+        }
+
         const pageNum = Math.max(1, parseInt(page as string));
-        const limitNum = Math.min(100, Math.max(1, parseInt(limit as string)));
+        const limitNum = Math.min(5000, Math.max(1, parseInt(limit as string)));
         const skip = (pageNum - 1) * limitNum;
 
         const [total, data] = await Promise.all([

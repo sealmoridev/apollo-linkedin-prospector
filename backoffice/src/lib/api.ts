@@ -252,6 +252,7 @@ export const getConsumoHistorial = async (params: {
     limit?: number;
     sheet_name?: string;
     only_leads?: boolean;
+    search?: string;
 }): Promise<ConsumoHistorialResult> => {
     const qs = new URLSearchParams();
     if (params.empresa_id) qs.set('empresa_id', params.empresa_id);
@@ -262,6 +263,7 @@ export const getConsumoHistorial = async (params: {
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.sheet_name) qs.set('sheet_name', params.sheet_name);
     if (params.only_leads) qs.set('only_leads', 'true');
+    if (params.search) qs.set('search', params.search);
     const url = `${API_URL}/admin/consumos/historial?${qs.toString()}`;
     const res = await fetch(url, { headers: getAuthHeaders() });
     if (!res.ok) {

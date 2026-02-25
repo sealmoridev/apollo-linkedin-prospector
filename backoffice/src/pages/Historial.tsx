@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumoHistorial, getConsumoSheetNames } from '../lib/api';
-import type { EmpresaDetail, ExtensionUser, Consumo } from '../lib/api';
+import type { EmpresaDetail, ExtensionUser, Consumo, LeadData } from '../lib/api';
 import { useActiveEmpresa } from '../ActiveEmpresaContext';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
@@ -14,8 +14,7 @@ import {
 import { Badge } from '../components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
 import { Separator } from '../components/ui/separator';
-import type { LeadData } from '../lib/api';
-import { Filter, X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Search, Download, X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -75,17 +74,26 @@ export default function Historial() {
     const [panelOpen, setPanelOpen] = useState(false);
     const [selectedCapture, setSelectedCapture] = useState<{ lead: LeadData; sheet_name: string | null } | null>(null);
 
-    // Filters — no date filter by default (show all records)
+    // Filters
+    const [searchInput, setSearchInput] = useState('');
+    const [search, setSearch] = useState('');
     const [desde, setDesde] = useState('');
     const [hasta, setHasta] = useState('');
     const [usuarioId, setUsuarioId] = useState('');
     const [sheetNameFilter, setSheetNameFilter] = useState('');
-    const [tipoFilter, setTipoFilter] = useState<'all' | 'captures' | 'credits'>('all');
+    const [tipoFilter, setTipoFilter] = useState<'all' | 'captures' | 'credits'>('captures');
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(50);
 
-    const [pendingDesde, setPendingDesde] = useState('');
-    const [pendingHasta, setPendingHasta] = useState('');
+    // Debounce search input → commit to search state after 400ms idle
+    useEffect(() => {
+        const t = setTimeout(() => {
+            setSearch(searchInput);
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchInput]);
 
     // Clear empresa context on unmount
     useEffect(() => {
@@ -129,11 +137,12 @@ export default function Historial() {
         try {
             const result = await getConsumoHistorial({
                 empresa_id: empresa?.id,
-                desde,
-                hasta,
+                desde: desde || undefined,
+                hasta: hasta || undefined,
                 usuario_id: usuarioId || undefined,
                 sheet_name: sheetNameFilter || undefined,
                 only_leads: tipoFilter === 'captures' ? true : undefined,
+                search: search || undefined,
                 page: currentPage,
                 limit
             });
@@ -148,41 +157,89 @@ export default function Historial() {
         } finally {
             setLoadingData(false);
         }
-    }, [empresa, empresaId, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
+    }, [empresa, empresaId, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, search, page, limit]);
 
     useEffect(() => {
         if (!loadingInit) fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loadingInit, empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
+    }, [loadingInit, empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, search, page, limit]);
 
     const applyPreset = (days: number) => {
         const d = new Date();
         d.setDate(d.getDate() - (days - 1));
         d.setHours(0, 0, 0, 0);
-        const newDesde = toISO(d);
-        const newHasta = toISO(new Date());
-        setPendingDesde(newDesde); setPendingHasta(newHasta);
-        setDesde(newDesde); setHasta(newHasta);
+        setDesde(toISO(d));
+        setHasta(toISO(new Date()));
         setPage(1);
     };
 
-    const applyDateFilter = () => {
-        if (pendingDesde && pendingHasta && pendingDesde > pendingHasta) {
-            toast.error('"Desde" debe ser anterior a "Hasta"'); return;
-        }
-        setDesde(pendingDesde); setHasta(pendingHasta); setPage(1);
-    };
-
     const clearFilters = () => {
-        setPendingDesde(''); setPendingHasta('');
+        setSearchInput(''); setSearch('');
         setDesde(''); setHasta('');
-        setUsuarioId(''); setSheetNameFilter(''); setTipoFilter('all'); setPage(1);
+        setUsuarioId(''); setSheetNameFilter('');
+        setTipoFilter('captures'); setPage(1);
     };
 
-    const hasActiveFilters = usuarioId !== '' || sheetNameFilter !== '' || tipoFilter !== 'all'
-        || desde !== '' || hasta !== '';
+    const hasActiveFilters = searchInput !== '' || usuarioId !== '' || sheetNameFilter !== ''
+        || tipoFilter !== 'captures' || desde !== '' || hasta !== '';
 
     const sdrMap = new Map(sdrs.map(s => [s.id, s]));
+
+    // Export filtered view as CSV (UTF-8 BOM for Excel compatibility)
+    const handleExport = async () => {
+        try {
+            const result = await getConsumoHistorial({
+                empresa_id: empresa?.id,
+                desde: desde || undefined,
+                hasta: hasta || undefined,
+                usuario_id: usuarioId || undefined,
+                sheet_name: sheetNameFilter || undefined,
+                only_leads: tipoFilter === 'captures' ? true : undefined,
+                search: search || undefined,
+                page: 1,
+                limit: 5000,
+            });
+            let rows = result.data;
+            if (tipoFilter === 'credits') rows = rows.filter(c => !c.lead_data);
+
+            const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+            const headers = [
+                'Fecha', 'Nombre completo', 'Nombre', 'Apellido', 'Título',
+                'Email principal', 'Email personal', 'Teléfono',
+                'Empresa', 'Dominio', 'Industria', 'Ubicación', 'LinkedIn',
+                'Estado email', 'Sheet', 'SDR', 'Apollo', 'Verifier'
+            ];
+
+            const csvRows = rows.map(c => {
+                const ld = c.lead_data;
+                const sdr = sdrMap.get(c.usuario_id);
+                const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || '';
+                const apollo = c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
+                const verifier = c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier;
+                return [
+                    new Date(c.fecha).toLocaleString('es-CL'),
+                    ld?.full_name, ld?.first_name, ld?.last_name, ld?.title,
+                    ld?.primary_email, ld?.personal_email, ld?.phone_number,
+                    ld?.company_name, ld?.company_domain, ld?.industry,
+                    ld?.location, ld?.linkedin_url, ld?.email_status,
+                    c.sheet_name, sdrLabel, apollo, verifier,
+                ].map(escape).join(',');
+            });
+
+            const csv = '\uFEFF' + [headers.map(escape).join(','), ...csvRows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `registros-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            toast.error(err.message || 'Error al exportar');
+        }
+    };
 
     // ─ Render ─────────────────────────────────────────────────────────────────
 
@@ -191,7 +248,7 @@ export default function Historial() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div>
                 <h1 className="text-2xl font-bold">Registros</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
@@ -199,81 +256,95 @@ export default function Historial() {
                 </p>
             </div>
 
-            {/* Filters */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-muted-foreground" />
-                        <CardTitle className="text-sm">Filtros</CardTitle>
-                        {hasActiveFilters && (
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground gap-1 ml-auto" onClick={clearFilters}>
-                                <X className="h-3 w-3" /> Limpiar
-                            </Button>
-                        )}
+            {/* Compact filter toolbar */}
+            <div className="rounded-lg border bg-card p-3 space-y-2">
+                {/* Row 1: Search + Selects + Actions */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative min-w-[180px] flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                            placeholder="Buscar nombre, email, empresa..."
+                            className="h-9 pl-8 text-sm"
+                            value={searchInput}
+                            onChange={e => setSearchInput(e.target.value)}
+                        />
                     </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    {/* Quick presets */}
-                    <div className="flex flex-wrap gap-2">
-                        {[{ label: 'Hoy', days: 1 }, { label: 'Ayer', days: 2 }, { label: '7 días', days: 7 }, { label: '30 días', days: 30 }].map(p => (
-                            <Button key={p.label} variant="outline" size="sm" className="h-7 text-xs" onClick={() => applyPreset(p.days)}>{p.label}</Button>
+
+                    <Select value={usuarioId || '__all'} onValueChange={v => { setUsuarioId(v === '__all' ? '' : v); setPage(1); }}>
+                        <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="Todos los SDRs" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all">Todos los SDRs</SelectItem>
+                            {sdrs.map(s => <SelectItem key={s.id} value={s.id}>{s.nombre || s.email}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+
+                    {sheetNames.length > 0 && (
+                        <Select value={sheetNameFilter || '__all'} onValueChange={v => { setSheetNameFilter(v === '__all' ? '' : v); setPage(1); }}>
+                            <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="Todos los sheets" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all">Todos los sheets</SelectItem>
+                                {sheetNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    )}
+
+                    <Select value={tipoFilter} onValueChange={v => { setTipoFilter(v as any); setPage(1); }}>
+                        <SelectTrigger className="h-9 w-36 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos</SelectItem>
+                            <SelectItem value="captures">Solo capturas</SelectItem>
+                            <SelectItem value="credits">Solo créditos</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <div className="flex-1" />
+
+                    {hasActiveFilters && (
+                        <Button variant="ghost" size="sm" className="h-9 px-2.5 gap-1.5 text-muted-foreground" onClick={clearFilters}>
+                            <X className="h-3.5 w-3.5" /> Limpiar
+                        </Button>
+                    )}
+
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={handleExport} disabled={loadingData}>
+                        <Download className="h-3.5 w-3.5" /> Exportar CSV
+                    </Button>
+                </div>
+
+                {/* Row 2: Date presets + date range */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1">
+                        {[{ label: 'Hoy', days: 1 }, { label: '7 días', days: 7 }, { label: '30 días', days: 30 }].map(p => (
+                            <Button
+                                key={p.label}
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={() => applyPreset(p.days)}
+                            >
+                                {p.label}
+                            </Button>
                         ))}
                     </div>
-
-                    {/* Date + SDR + Tipo + Sheet */}
-                    <div className="flex flex-wrap items-end gap-3">
-                        <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium">Desde <span className="text-muted-foreground/50">(opcional)</span></p>
-                            <Input type="date" className="h-8 w-36 text-sm" value={pendingDesde} max={pendingHasta || undefined} onChange={e => setPendingDesde(e.target.value)} />
-                        </div>
-                        <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium">Hasta <span className="text-muted-foreground/50">(opcional)</span></p>
-                            <Input type="date" className="h-8 w-36 text-sm" value={pendingHasta} min={pendingDesde || undefined} onChange={e => setPendingHasta(e.target.value)} />
-                        </div>
-                        <Button size="sm" className="h-8" onClick={applyDateFilter}>Aplicar fechas</Button>
-
-                        <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium">SDR</p>
-                            <Select value={usuarioId || '__all'} onValueChange={v => { setUsuarioId(v === '__all' ? '' : v); setPage(1); }}>
-                                <SelectTrigger className="h-8 w-52 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__all">Todos los SDRs</SelectItem>
-                                    {sdrs.map(s => (
-                                        <SelectItem key={s.id} value={s.id}>
-                                            {s.nombre || s.email}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium">Tipo</p>
-                            <Select value={tipoFilter} onValueChange={v => { setTipoFilter(v as any); setPage(1); }}>
-                                <SelectTrigger className="h-8 w-40 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todos</SelectItem>
-                                    <SelectItem value="captures">Solo capturas</SelectItem>
-                                    <SelectItem value="credits">Solo créditos</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {sheetNames.length > 0 && (
-                            <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground font-medium">Sheet</p>
-                                <Select value={sheetNameFilter || '__all'} onValueChange={v => { setSheetNameFilter(v === '__all' ? '' : v); setPage(1); }}>
-                                    <SelectTrigger className="h-8 w-48 text-sm"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__all">Todos los sheets</SelectItem>
-                                        {sheetNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Desde</span>
+                        <Input
+                            type="date"
+                            className="h-7 w-36 text-xs px-2"
+                            value={desde}
+                            max={hasta || undefined}
+                            onChange={e => { setDesde(e.target.value); setPage(1); }}
+                        />
+                        <span className="text-xs text-muted-foreground">hasta</span>
+                        <Input
+                            type="date"
+                            className="h-7 w-36 text-xs px-2"
+                            value={hasta}
+                            min={desde || undefined}
+                            onChange={e => { setHasta(e.target.value); setPage(1); }}
+                        />
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
 
             {/* Results table */}
             <Card>
