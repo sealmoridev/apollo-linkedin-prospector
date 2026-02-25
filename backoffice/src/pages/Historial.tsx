@@ -23,13 +23,6 @@ function toISO(d: Date) {
     return d.toISOString().slice(0, 10);
 }
 
-function defaultDesde() {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    d.setHours(0, 0, 0, 0);
-    return toISO(d);
-}
-
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 interface PaginationProps { page: number; totalPages: number; onChange: (p: number) => void; }
@@ -92,17 +85,17 @@ export default function Historial() {
     const [panelOpen, setPanelOpen] = useState(false);
     const [selectedCapture, setSelectedCapture] = useState<{ lead: LeadData; sheet_name: string | null } | null>(null);
 
-    // Filters
-    const [desde, setDesde] = useState(defaultDesde);
-    const [hasta, setHasta] = useState(toISO(new Date()));
+    // Filters — no date filter by default (show all records)
+    const [desde, setDesde] = useState('');
+    const [hasta, setHasta] = useState('');
     const [usuarioId, setUsuarioId] = useState('');
     const [sheetNameFilter, setSheetNameFilter] = useState('');
     const [tipoFilter, setTipoFilter] = useState<'all' | 'captures' | 'credits'>('all');
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(50);
 
-    const [pendingDesde, setPendingDesde] = useState(defaultDesde);
-    const [pendingHasta, setPendingHasta] = useState(toISO(new Date()));
+    const [pendingDesde, setPendingDesde] = useState('');
+    const [pendingHasta, setPendingHasta] = useState('');
 
     // Clear empresa context on unmount
     useEffect(() => {
@@ -112,8 +105,8 @@ export default function Historial() {
 
     // Init: load empresa + SDR list + sheet names
     useEffect(() => {
-        const fetchEmpresa = empresaId ? getEmpresa(empresaId) : getMiEmpresa();
-        fetchEmpresa
+        const loadEmpresa = empresaId ? getEmpresa(empresaId) : getMiEmpresa();
+        loadEmpresa
             .then(emp => {
                 setEmpresa(emp);
                 if (empresaId) setActiveEmpresa({ id: emp.id, nombre: emp.nombre, logo_url: emp.logo_url });
@@ -126,19 +119,26 @@ export default function Historial() {
                 setSdrs(users);
                 setSheetNames(names);
             })
-            .catch(() => toast.error('Error al inicializar'))
+            .catch(() => {
+                if (!empresaId) {
+                    // SUPERADMIN global view — no company context, fetch sheet names without filter
+                    getConsumoSheetNames().then(setSheetNames).catch(() => {});
+                } else {
+                    toast.error('Error al inicializar');
+                }
+            })
             .finally(() => setLoadingInit(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [empresaId]);
 
     // Fetch data when filters change
     const fetchData = useCallback(async (overridePage?: number) => {
-        if (!empresa) return;
+        if (!empresa && !!empresaId) return; // empresa-specific route but empresa not yet loaded
         const currentPage = overridePage ?? page;
         setLoadingData(true);
         try {
             const result = await getConsumoHistorial({
-                empresa_id: empresa.id,
+                empresa_id: empresa?.id,
                 desde,
                 hasta,
                 usuario_id: usuarioId || undefined,
@@ -158,12 +158,12 @@ export default function Historial() {
         } finally {
             setLoadingData(false);
         }
-    }, [empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
+    }, [empresa, empresaId, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
 
     useEffect(() => {
-        if (empresa) fetchData();
+        if (!loadingInit) fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
+    }, [loadingInit, empresa, desde, hasta, usuarioId, sheetNameFilter, tipoFilter, page, limit]);
 
     const applyPreset = (days: number) => {
         const d = new Date();
@@ -177,19 +177,20 @@ export default function Historial() {
     };
 
     const applyDateFilter = () => {
-        if (pendingDesde > pendingHasta) { toast.error('"Desde" debe ser anterior a "Hasta"'); return; }
+        if (pendingDesde && pendingHasta && pendingDesde > pendingHasta) {
+            toast.error('"Desde" debe ser anterior a "Hasta"'); return;
+        }
         setDesde(pendingDesde); setHasta(pendingHasta); setPage(1);
     };
 
     const clearFilters = () => {
-        const d = defaultDesde(); const h = toISO(new Date());
-        setPendingDesde(d); setPendingHasta(h);
-        setDesde(d); setHasta(h);
+        setPendingDesde(''); setPendingHasta('');
+        setDesde(''); setHasta('');
         setUsuarioId(''); setSheetNameFilter(''); setTipoFilter('all'); setPage(1);
     };
 
     const hasActiveFilters = usuarioId !== '' || sheetNameFilter !== '' || tipoFilter !== 'all'
-        || desde !== defaultDesde() || hasta !== toISO(new Date());
+        || desde !== '' || hasta !== '';
 
     const sdrMap = new Map(sdrs.map(s => [s.id, s]));
 
@@ -232,12 +233,12 @@ export default function Historial() {
                     {/* Date + SDR + Tipo + Sheet */}
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium">Desde</p>
-                            <Input type="date" className="h-8 w-36 text-sm" value={pendingDesde} max={pendingHasta} onChange={e => setPendingDesde(e.target.value)} />
+                            <p className="text-xs text-muted-foreground font-medium">Desde <span className="text-muted-foreground/50">(opcional)</span></p>
+                            <Input type="date" className="h-8 w-36 text-sm" value={pendingDesde} max={pendingHasta || undefined} onChange={e => setPendingDesde(e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium">Hasta</p>
-                            <Input type="date" className="h-8 w-36 text-sm" value={pendingHasta} min={pendingDesde} onChange={e => setPendingHasta(e.target.value)} />
+                            <p className="text-xs text-muted-foreground font-medium">Hasta <span className="text-muted-foreground/50">(opcional)</span></p>
+                            <Input type="date" className="h-8 w-36 text-sm" value={pendingHasta} min={pendingDesde || undefined} onChange={e => setPendingHasta(e.target.value)} />
                         </div>
                         <Button size="sm" className="h-8" onClick={applyDateFilter}>Aplicar fechas</Button>
 
@@ -369,10 +370,16 @@ export default function Historial() {
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{c.sheet_name || '—'}</TableCell>
                                             <TableCell className="text-right">
-                                                {c.creditos_apollo > 0 ? <Badge variant="secondary">{c.creditos_apollo}</Badge> : <span className="text-muted-foreground text-sm">—</span>}
+                                                {(() => {
+                                                    const v = c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
+                                                    return v > 0 ? <Badge variant="secondary">{v}</Badge> : <span className="text-muted-foreground text-sm">—</span>;
+                                                })()}
                                             </TableCell>
                                             <TableCell className="text-right pr-6">
-                                                {c.creditos_verifier > 0 ? <Badge variant="outline">{c.creditos_verifier}</Badge> : <span className="text-muted-foreground text-sm">—</span>}
+                                                {(() => {
+                                                    const v = c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier;
+                                                    return v > 0 ? <Badge variant="outline">{v}</Badge> : <span className="text-muted-foreground text-sm">—</span>;
+                                                })()}
                                             </TableCell>
                                         </TableRow>
                                     );

@@ -69,6 +69,8 @@ model Consumo {
   creditos_apollo   Int      @default(0)
   creditos_verifier Int      @default(0)
 
+  sesion_id         String?
+
   lead_data         Json?
   sheet_id          String?
   sheet_name        String?

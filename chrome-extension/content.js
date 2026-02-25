@@ -296,6 +296,7 @@ const initializeWidgetLogic = async () => {
 
     // Estado Interno
     let currentLinkedinUrl = window.location.href;
+    let currentSesionId = crypto.randomUUID(); // UUID único por perfil visitado (solo en RAM)
     let apiUrl = 'https://mrprospect.app';
     let tenantApiKey = '';
     let isAuthenticated = false;
@@ -630,6 +631,7 @@ const initializeWidgetLogic = async () => {
     setInterval(() => {
         if (currentLinkedinUrl !== window.location.href) {
             currentLinkedinUrl = window.location.href;
+            currentSesionId = crypto.randomUUID(); // Nuevo perfil → nueva sesión
             hasExtractedCurrentProfile = false; // Reset lock when URL changes
             updateUrlDisplay();
             resetToExtractState(); // Al cambiar de página, volver al estado 1
@@ -800,7 +802,8 @@ const initializeWidgetLogic = async () => {
                 body: JSON.stringify({
                     linkedinUrl: currentLinkedinUrl,
                     includePhone: includePhoneToggle.checked,
-                    userId: userId
+                    userId: userId,
+                    sesion_id: currentSesionId
                 })
             });
 
@@ -864,7 +867,7 @@ const initializeWidgetLogic = async () => {
                         'x-api-key': tenantApiKey,
                         'x-google-id': userId
                     },
-                    body: JSON.stringify({ email: emailToVerify })
+                    body: JSON.stringify({ email: emailToVerify, sesion_id: currentSesionId })
                 });
 
                 const data = await response.json();
@@ -932,7 +935,8 @@ const initializeWidgetLogic = async () => {
                     userId: userId,
                     spreadsheetId: selectedSheetId,
                     lead: extractedLeadData,
-                    sheetName: customSheetName
+                    sheetName: customSheetName,
+                    sesion_id: currentSesionId
                 })
             });
 

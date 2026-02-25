@@ -127,7 +127,7 @@ app.get('/api', (req: Request, res: Response) => {
 // Enriquecer un perfil individual
 app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const { linkedinUrl, includePhone = false } = req.body;
+    const { linkedinUrl, includePhone = false, sesion_id } = req.body;
     const tenant = req.tenant!;
     const user = req.extensionUser!;
 
@@ -170,7 +170,8 @@ app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response
         usuario_id: user.id,
         empresa_id: tenant.id,
         creditos_apollo: lead.creditsConsumed || 1,
-        creditos_verifier: 0
+        creditos_verifier: 0,
+        sesion_id: sesion_id || null
       }
     });
 
@@ -251,7 +252,7 @@ app.post('/api/enrich/batch', tenantAuthMiddleware, async (req: Request, res: Re
 // Validar correo manualmente (MillionVerify)
 app.post('/api/verify-email', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const { email, sesion_id } = req.body;
     const tenant = req.tenant!;
     const user = req.extensionUser!;
 
@@ -272,7 +273,8 @@ app.post('/api/verify-email', tenantAuthMiddleware, async (req: Request, res: Re
           usuario_id: user.id,
           empresa_id: tenant.id,
           creditos_apollo: 0,
-          creditos_verifier: 1
+          creditos_verifier: 1,
+          sesion_id: sesion_id || null
         }
       });
     }
@@ -336,7 +338,7 @@ app.post('/api/sheets/create', async (req: Request, res: Response) => {
 // Guardar datos en una hoja específica
 app.post('/api/sheets/save', async (req: Request, res: Response) => {
   try {
-    const { userId = 'default', spreadsheetId, lead, sheetName } = req.body;
+    const { userId = 'default', spreadsheetId, lead, sheetName, sesion_id } = req.body;
 
     if (!spreadsheetId || !lead) {
       return res.status(400).json({
@@ -373,6 +375,7 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
               empresa_id: extensionUser.empresa_id,
               creditos_apollo: 0,
               creditos_verifier: 0,
+              sesion_id: sesion_id || null,
               sheet_id: sheetResult.spreadsheetId || spreadsheetId,
               sheet_name: sheetName || null,
               lead_data: {

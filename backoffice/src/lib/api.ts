@@ -63,6 +63,10 @@ export interface Consumo {
     empresa_id: string;
     creditos_apollo: number;
     creditos_verifier: number;
+    sesion_id: string | null;
+    // Credits from the full sesion (backend-enriched, only present in historial response)
+    sesion_apollo: number | null;
+    sesion_verifier: number | null;
     fecha: string;
     lead_data: LeadData | null;
     sheet_id: string | null;

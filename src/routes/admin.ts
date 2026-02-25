@@ -222,8 +222,34 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
             })
         ]);
 
+        // Enrich lead captures with credit totals from their sesion
+        const sesionIds = data
+            .map((c: any) => c.sesion_id)
+            .filter((id: any) => !!id) as string[];
+
+        const sesionCreditsMap = new Map<string, { apollo: number; verifier: number }>();
+        if (sesionIds.length > 0) {
+            const creditGroups = await (prisma.consumo as any).groupBy({
+                by: ['sesion_id'],
+                where: { sesion_id: { in: sesionIds }, lead_data: null },
+                _sum: { creditos_apollo: true, creditos_verifier: true }
+            });
+            for (const g of creditGroups) {
+                sesionCreditsMap.set(g.sesion_id, {
+                    apollo: g._sum.creditos_apollo ?? 0,
+                    verifier: g._sum.creditos_verifier ?? 0
+                });
+            }
+        }
+
+        const enrichedData = data.map((c: any) => ({
+            ...c,
+            sesion_apollo: c.sesion_id ? (sesionCreditsMap.get(c.sesion_id)?.apollo ?? 0) : null,
+            sesion_verifier: c.sesion_id ? (sesionCreditsMap.get(c.sesion_id)?.verifier ?? 0) : null
+        }));
+
         res.json({
-            data,
+            data: enrichedData,
             total,
             page: pageNum,
             totalPages: Math.ceil(total / limitNum),
