@@ -131,17 +131,6 @@ const widgetHTML = `
           <div id="apCurrentUrl" class="ap-card-value">...</div>
         </div>
 
-        <div class="ap-toggle-group">
-          <div class="ap-toggle-label">
-            Incluir Teléfono (Webhook)
-            <span class="ap-credit-badge">⚡ Consume créditos</span>
-          </div>
-          <label class="ap-switch">
-            <input type="checkbox" id="apIncludePhone">
-            <span class="ap-slider"></span>
-          </label>
-        </div>
-
         <button id="apExtractBtn" class="ap-btn-primary" disabled>
           <span class="ap-btn-text" style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4 4 4-4"></path></svg> Extraer Datos</span>
           <span id="apExtractLoader" class="ap-loader"></span>
@@ -189,9 +178,13 @@ const widgetHTML = `
             </div>
             <div class="ap-data-row-modern">
                 <div class="ap-data-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg></div>
-                <div class="ap-data-content">
+                <div class="ap-data-content" style="flex:1; min-width:0;">
                     <div class="ap-data-label-modern">Teléfono</div>
-                    <div class="ap-data-value-modern" id="apDataPhone"></div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <div class="ap-data-value-modern" id="apDataPhone" style="flex:1;"></div>
+                        <button id="apRequestPhoneBtn" class="ap-btn-validate" style="display: none;"></button>
+                        <div id="apPhoneBadge" class="ap-badge" style="display: none;"></div>
+                    </div>
                 </div>
             </div>
           </div>
@@ -248,9 +241,9 @@ const initializeWidgetLogic = async () => {
     const previewSection = document.getElementById('apPreviewSection');
 
     const currentUrlEl = document.getElementById('apCurrentUrl');
-    const includePhoneToggle = document.getElementById('apIncludePhone');
     const validateEmailBtn = document.getElementById('apValidateEmailBtn');
     const emailBadge = document.getElementById('apEmailBadge');
+    const requestPhoneBtn = document.getElementById('apRequestPhoneBtn');
 
     const extractBtn = document.getElementById('apExtractBtn');
     const extractBtnText = extractBtn.querySelector('.ap-btn-text');
@@ -538,7 +531,22 @@ const initializeWidgetLogic = async () => {
             emailBadge.style.display = 'none';
         }
 
-        document.getElementById('apDataPhone').textContent = leadData.phoneNumber || (includePhoneToggle.checked ? '(Pendiente de Webhook)' : 'No solicitado');
+        // Phone: show if Apollo returned it, else offer "Solicitar" button
+        const phoneEl = document.getElementById('apDataPhone');
+        const phBadge = document.getElementById('apPhoneBadge');
+        if (leadData.phoneNumber) {
+            phoneEl.textContent = leadData.phoneNumber;
+            if (requestPhoneBtn) requestPhoneBtn.style.display = 'none';
+            if (phBadge) phBadge.style.display = 'none';
+        } else {
+            phoneEl.textContent = '—';
+            if (phBadge) phBadge.style.display = 'none';
+            if (requestPhoneBtn) {
+                requestPhoneBtn.style.display = 'flex';
+                requestPhoneBtn.disabled = false;
+                requestPhoneBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Solicitar';
+            }
+        }
 
         // Initial setup for Validate and Save buttons based on if there is a primary email
         if (extractedLeadData.primaryEmail && validateEmailBtn && emailBadge) {
@@ -804,7 +812,7 @@ const initializeWidgetLogic = async () => {
                 },
                 body: JSON.stringify({
                     linkedinUrl: currentLinkedinUrl,
-                    includePhone: includePhoneToggle.checked,
+                    includePhone: false,
                     userId: userId,
                     sesion_id: currentSesionId
                 })
@@ -899,6 +907,48 @@ const initializeWidgetLogic = async () => {
                 console.error('Validation error:', err);
                 validateEmailBtn.disabled = false;
                 validateEmailBtn.innerHTML = 'Reintentar';
+            }
+        });
+    }
+
+    // --- ACCIÓN: SOLICITAR TELÉFONO (PASO 2) ---
+    if (requestPhoneBtn) {
+        requestPhoneBtn.addEventListener('click', async () => {
+            if (!extractedLeadData) return;
+            requestPhoneBtn.disabled = true;
+            requestPhoneBtn.innerHTML = '<span class="ap-loader" style="display:inline-block; border-color:#334155 transparent transparent transparent; width:12px; height:12px; margin-right: 4px;"></span>...';
+
+            try {
+                const response = await fetch(`${apiUrl}/api/enrich-phone`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': tenantApiKey,
+                        'x-google-id': userId
+                    },
+                    body: JSON.stringify({
+                        linkedinUrl: currentLinkedinUrl,
+                        sesion_id: currentSesionId
+                    })
+                });
+
+                if (response.ok) {
+                    requestPhoneBtn.style.display = 'none';
+                    const phBadge = document.getElementById('apPhoneBadge');
+                    if (phBadge) {
+                        phBadge.style.display = 'inline-flex';
+                        phBadge.className = 'ap-badge ap-badge-catchall';
+                        phBadge.innerHTML = '<svg style="width:12px; height:12px; margin-right:3px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Enviado';
+                    }
+                    document.getElementById('apDataPhone').textContent = 'Pendiente de webhook...';
+                } else {
+                    throw new Error('Error en la solicitud');
+                }
+            } catch (err) {
+                console.error('Phone request error:', err);
+                requestPhoneBtn.disabled = false;
+                requestPhoneBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Reintentar';
+                showMessage('Error al solicitar teléfono', true);
             }
         });
     }

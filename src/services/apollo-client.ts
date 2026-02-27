@@ -18,7 +18,7 @@ export class ApolloClient {
     this.apiKey = apiKey;
     this.webhookServer = webhookServer;
     this.client = axios.create({
-      baseURL: 'https://api.apollo.io/v1',
+      baseURL: 'https://api.apollo.io/api/v1',
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache'

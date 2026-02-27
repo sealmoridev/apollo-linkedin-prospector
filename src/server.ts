@@ -290,6 +290,49 @@ app.post('/api/verify-email', tenantAuthMiddleware, async (req: Request, res: Re
   }
 });
 
+// Solicitar teléfono de forma independiente (llega vía webhook de Apollo al Sheet)
+app.post('/api/enrich-phone', tenantAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { linkedinUrl, sesion_id } = req.body;
+    const tenant = req.tenant!;
+    const user = req.extensionUser!;
+
+    if (!linkedinUrl) {
+      return res.status(400).json({ error: 'linkedinUrl is required' });
+    }
+
+    if (!tenant.apollo_api_key) {
+      return res.status(403).json({ error: 'Apollo API Key no configurada para el tenant.' });
+    }
+
+    console.log(`[API] Phone request for: ${linkedinUrl} by user ${user.id}`);
+
+    // Registrar crédito consumido inmediatamente
+    await prisma.consumo.create({
+      data: {
+        usuario_id: user.id,
+        empresa_id: tenant.id,
+        creditos_apollo: 1,
+        creditos_verifier: 0,
+        sesion_id: sesion_id || null
+      }
+    });
+
+    // Disparar enriquecimiento async con teléfono — la respuesta llega al webhook y actualiza el Sheet
+    enrichmentService.enrichProfile(tenant.apollo_api_key, linkedinUrl, user.id, true)
+      .catch(err => console.error('[API] enrich-phone async error:', err));
+
+    res.json({ success: true, message: 'Solicitud enviada. El teléfono llegará al Sheet vía webhook.' });
+
+  } catch (error) {
+    console.error('[API] Error requesting phone:', error);
+    res.status(500).json({
+      error: 'Error al solicitar teléfono',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // ============================================================================
 // RUTAS DE GOOGLE SHEETS (PASO 2)
 // ============================================================================
