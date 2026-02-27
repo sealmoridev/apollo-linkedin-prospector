@@ -146,9 +146,12 @@ const widgetHTML = `
               <svg style="width:14px; height:14px; stroke-width:2.5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
               Prospecto Extraído
             </div>
-            <button id="apCopyDataBtn" class="ap-icon-btn" title="Copiar Datos" style="background: none; border: none; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; transition: all 0.2s;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            </button>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div id="apProviderBadge" style="display:none; align-items:center; gap:4px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:20px; padding:2px 8px 2px 4px; font-size:10px; font-weight:600; color:#475569; white-space:nowrap;"></div>
+              <button id="apCopyDataBtn" class="ap-icon-btn" title="Copiar Datos" style="background: none; border: none; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; transition: all 0.2s;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              </button>
+            </div>
           </div>
           <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
             <div class="ap-data-row-modern">
@@ -387,6 +390,17 @@ const initializeWidgetLogic = async () => {
         extractSection.style.display = 'none';
         previewSection.style.display = 'flex';
         extractedLeadData = leadData;
+
+        // Provider badge
+        const providerBadge = document.getElementById('apProviderBadge');
+        if (providerBadge) {
+            const isProspeo = currentEnrichmentProvider === 'prospeo';
+            const iconUrl = isProspeo
+                ? chrome.runtime.getURL('assets/prospeoicon.png')
+                : chrome.runtime.getURL('assets/apolloicon.png');
+            providerBadge.innerHTML = `<img src="${iconUrl}" style="width:12px;height:12px;object-fit:contain;border-radius:2px;"> ${isProspeo ? 'Prospeo' : 'Apollo'}`;
+            providerBadge.style.display = 'flex';
+        }
 
         // Populate card
         document.getElementById('apDataName').textContent = leadData.fullName || leadData.firstName || 'Sin nombre';
@@ -996,7 +1010,8 @@ const initializeWidgetLogic = async () => {
                     spreadsheetId: selectedSheetId,
                     lead: extractedLeadData,
                     sheetName: customSheetName,
-                    sesion_id: currentSesionId
+                    sesion_id: currentSesionId,
+                    provider: currentEnrichmentProvider
                 })
             });
 

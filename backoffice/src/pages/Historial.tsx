@@ -377,18 +377,19 @@ export default function Historial() {
                                 <TableHead>Empresa</TableHead>
                                 <TableHead>SDR</TableHead>
                                 <TableHead>Sheet</TableHead>
-                                <TableHead className="text-right">Apollo</TableHead>
+                                <TableHead>Vía</TableHead>
+                                <TableHead className="text-right">Créditos</TableHead>
                                 <TableHead className="text-right pr-6">Verifier</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loadingData ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
+                                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
                                 </TableRow>
                             ) : data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
+                                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
                                 </TableRow>
                             ) : (
                                 data.map(c => {
@@ -396,6 +397,7 @@ export default function Historial() {
                                     const sdr = sdrMap.get(c.usuario_id);
                                     const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || c.usuario_id;
                                     const isCapture = !!ld;
+                                    const prov = ld?.enrichment_provider || null;
                                     return (
                                         <TableRow
                                             key={c.id}
@@ -430,6 +432,20 @@ export default function Historial() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{c.sheet_name || '—'}</TableCell>
+                                            <TableCell>
+                                                {prov ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <img
+                                                            src={`${import.meta.env.BASE_URL}${prov === 'prospeo' ? 'prospeoicon.png' : 'apolloicon.png'}`}
+                                                            alt={prov}
+                                                            className="h-4 w-4 object-contain rounded"
+                                                        />
+                                                        <span className="text-xs text-muted-foreground capitalize">{prov}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">—</span>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 {(() => {
                                                     const v = c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
@@ -526,6 +542,22 @@ export default function Historial() {
                                             <div className="space-y-2">
                                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sheet</p>
                                                 <p className="text-sm">{selectedCapture.sheet_name}</p>
+                                            </div>
+                                        </>
+                                    )}
+                                    {ld.enrichment_provider && (
+                                        <>
+                                            <Separator />
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proveedor</p>
+                                                <div className="flex items-center gap-2">
+                                                    <img
+                                                        src={`${import.meta.env.BASE_URL}${ld.enrichment_provider === 'prospeo' ? 'prospeoicon.png' : 'apolloicon.png'}`}
+                                                        alt={ld.enrichment_provider}
+                                                        className="h-5 w-5 object-contain rounded"
+                                                    />
+                                                    <span className="text-sm capitalize">{ld.enrichment_provider}</span>
+                                                </div>
                                             </div>
                                         </>
                                     )}

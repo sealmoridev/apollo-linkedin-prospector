@@ -228,7 +228,7 @@ export default function Apis() {
                             }`}
                         >
                             <div className="flex items-center justify-between w-full">
-                                <span className="text-sm font-semibold tracking-tight">Prospeo</span>
+                                <img src={`${import.meta.env.BASE_URL}prospeoicon.png`} alt="Prospeo" className="h-6 object-contain" />
                                 {currentProvider === 'prospeo' && (
                                     <Badge variant="default" className="text-xs">Activo</Badge>
                                 )}
@@ -258,8 +258,7 @@ export default function Apis() {
             <ApiKeyCard
                 title="Prospeo.io"
                 description="Alternativa a Apollo con teléfono sincrónico. Desde plan Starter ($39/mes)."
-                Icon={Zap}
-                iconClass="text-orange-400"
+                logoUrl={`${import.meta.env.BASE_URL}prospeoicon.png`}
                 initialValue={empresa.prospeo_api_key ?? ''}
                 placeholder="••••••••••••••••"
                 docsUrl="https://prospeo.io"

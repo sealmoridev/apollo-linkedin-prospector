@@ -255,7 +255,7 @@ export class SheetsService {
             await sheets.spreadsheets.values.append({
                 spreadsheetId: spreadsheetId,
                 range: 'Leads Base!A:R',
-                valueInputOption: 'USER_ENTERED',
+                valueInputOption: 'RAW',
                 insertDataOption: 'OVERWRITE',
                 requestBody: {
                     values: values

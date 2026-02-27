@@ -33,6 +33,7 @@ export class ProspeoClient {
       console.log(`[Prospeo] Enriching profile: ${linkedinUrl}`);
 
       const response = await this.client.post('/enrich-person', {
+        enrich_email: true,
         enrich_mobile: true,
         only_verified_mobile: false,
         data: { linkedin_url: linkedinUrl }
