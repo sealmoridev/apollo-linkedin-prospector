@@ -12,6 +12,8 @@ model Empresa {
   tenant_api_key          String          @unique @default(uuid())
   apollo_api_key          String?
   millionverifier_api_key String?
+  prospeo_api_key         String?
+  enrichment_provider     String          @default("apollo")
   logo_url                String?
   key_active              Boolean         @default(true)
 

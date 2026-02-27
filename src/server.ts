@@ -131,37 +131,45 @@ app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response
     const tenant = req.tenant!;
     const user = req.extensionUser!;
 
-    if (!tenant.apollo_api_key) {
-      return res.status(403).json({ error: 'Configuración Apollo API Key faltante para el tenant.' });
+    const provider = (tenant as any).enrichment_provider || 'apollo';
+    const prospeoKey = (tenant as any).prospeo_api_key as string | null;
+
+    // Validar que el proveedor esté configurado
+    if (provider === 'prospeo') {
+      if (!prospeoKey) {
+        return res.status(403).json({ error: 'Prospeo API Key no configurada para el tenant.' });
+      }
+    } else {
+      if (!tenant.apollo_api_key) {
+        return res.status(403).json({ error: 'Apollo API Key no configurada para el tenant.' });
+      }
     }
 
     if (!linkedinUrl) {
       return res.status(400).json({
         error: 'linkedinUrl is required',
-        example: {
-          linkedinUrl: 'https://www.linkedin.com/in/username',
-          includePhone: false
-        }
+        example: { linkedinUrl: 'https://www.linkedin.com/in/username' }
       });
     }
 
     // Validar URL
     const validation = validateLinkedInUrl(linkedinUrl);
     if (!validation.isValid) {
-      return res.status(400).json({
-        error: 'Invalid LinkedIn URL',
-        details: validation.error
-      });
+      return res.status(400).json({ error: 'Invalid LinkedIn URL', details: validation.error });
     }
 
-    console.log(`[API] Enriching profile: ${linkedinUrl} (phone: ${includePhone}) by user ${user.id}`);
+    const providerConfig = provider === 'prospeo'
+      ? { provider: 'prospeo' as const, apiKey: prospeoKey! }
+      : { provider: 'apollo' as const, apiKey: tenant.apollo_api_key! };
 
-    // Enriquecer perfil usando el Apollo API Key del tenant
+    console.log(`[API] Enriching (${provider}): ${linkedinUrl} by user ${user.id}`);
+
+    // Para Prospeo, siempre incluir teléfono (sincrónico)
     const lead = await enrichmentService.enrichProfile(
-      tenant.apollo_api_key,
+      providerConfig,
       linkedinUrl,
       user.id,
-      includePhone
+      provider === 'prospeo' ? true : includePhone
     );
 
     // Guardar registro de consumo
@@ -177,7 +185,8 @@ app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response
 
     res.json({
       success: true,
-      data: lead
+      data: lead,
+      provider
     });
 
   } catch (error) {
@@ -290,7 +299,7 @@ app.post('/api/verify-email', tenantAuthMiddleware, async (req: Request, res: Re
   }
 });
 
-// Solicitar teléfono de forma independiente (llega vía webhook de Apollo al Sheet)
+// Solicitar teléfono de forma independiente (solo para tenants Apollo con webhook)
 app.post('/api/enrich-phone', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { linkedinUrl, sesion_id } = req.body;
@@ -299,6 +308,15 @@ app.post('/api/enrich-phone', tenantAuthMiddleware, async (req: Request, res: Re
 
     if (!linkedinUrl) {
       return res.status(400).json({ error: 'linkedinUrl is required' });
+    }
+
+    const provider = (tenant as any).enrichment_provider || 'apollo';
+
+    // Para Prospeo, el teléfono ya viene en la extracción inicial — este endpoint no aplica
+    if (provider === 'prospeo') {
+      return res.status(400).json({
+        error: 'Este endpoint no aplica para tenants Prospeo. El teléfono se incluye automáticamente en la extracción.'
+      });
     }
 
     if (!tenant.apollo_api_key) {
@@ -319,7 +337,7 @@ app.post('/api/enrich-phone', tenantAuthMiddleware, async (req: Request, res: Re
     });
 
     // Disparar enriquecimiento async con teléfono — la respuesta llega al webhook y actualiza el Sheet
-    enrichmentService.enrichProfile(tenant.apollo_api_key, linkedinUrl, user.id, true)
+    enrichmentService.enrichProfile({ provider: 'apollo', apiKey: tenant.apollo_api_key }, linkedinUrl, user.id, true)
       .catch(err => console.error('[API] enrich-phone async error:', err));
 
     res.json({ success: true, message: 'Solicitud enviada. El teléfono llegará al Sheet vía webhook.' });

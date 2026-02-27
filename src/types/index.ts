@@ -21,6 +21,9 @@ export interface EnrichedLead {
   enrichedAt: Date;
   creditsConsumed: number;
   apolloId: string | null;
+
+  // Extra fields from providers that don't map to standard columns
+  notes?: string | null;
 }
 
 export interface EnrichmentBatchResult {

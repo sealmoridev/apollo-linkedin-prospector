@@ -245,7 +245,7 @@ export class SheetsService {
                     lead.location || '',                  // L: location
                     lead.linkedinUrl || '',               // M: linkedin_url
                     emailStatusVal,                       // N: email_status
-                    '',                                   // O: notes (SDR fills manually)
+                    lead.notes || '',                     // O: notes (Prospeo extras, SDR fills otherwise)
                     sdrInfo?.id || '',                    // P: sdr_id
                     sdrInfo?.nombre || '',                // Q: sdr_name
                     sdrInfo?.email || ''                  // R: sdr_mail

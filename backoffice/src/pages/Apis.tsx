@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Zap } from 'lucide-react';
 
 // ─── ApiKeyCard — reusable, independiente por integración ─────────────────────
 
@@ -143,10 +143,17 @@ export default function Apis() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [empresaId]);
 
-    const saveApiKey = async (field: 'apollo_api_key' | 'millionverifier_api_key', value: string) => {
+    const saveApiKey = async (field: 'apollo_api_key' | 'millionverifier_api_key' | 'prospeo_api_key', value: string) => {
         if (!empresa) throw new Error('No hay empresa cargada');
         const updated = await updateEmpresa(empresa.id, { [field]: value });
         setEmpresa(prev => prev ? { ...prev, ...updated } : updated);
+    };
+
+    const saveProvider = async (provider: 'apollo' | 'prospeo') => {
+        if (!empresa) throw new Error('No hay empresa cargada');
+        const updated = await updateEmpresa(empresa.id, { enrichment_provider: provider });
+        setEmpresa(prev => prev ? { ...prev, ...updated } : updated);
+        toast.success(`Proveedor cambiado a ${provider === 'apollo' ? 'Apollo.io' : 'Prospeo'}`);
     };
 
     if (loading) {
@@ -161,30 +168,7 @@ export default function Apis() {
         return <div className="text-center py-12 text-muted-foreground">No hay empresa configurada.</div>;
     }
 
-    // ── API definitions — agregar nuevas APIs aquí ───────────────────────────
-    const apis = [
-        {
-            id: 'apollo',
-            title: 'Apollo.io',
-            description: 'Enriquecimiento de perfiles de LinkedIn — contactos, emails y datos laborales.',
-            logoUrl: `${import.meta.env.BASE_URL}Apollo-Logo.png`,
-            initialValue: empresa.apollo_api_key ?? '',
-            placeholder: 'sk_...',
-            docsUrl: 'https://app.apollo.io',
-            onSave: (key: string) => saveApiKey('apollo_api_key', key)
-        },
-        {
-            id: 'millionverifier',
-            title: 'MillionVerifier',
-            description: 'Verificación de validez de emails antes de guardarlos en el sheet.',
-            logoUrl: `${import.meta.env.BASE_URL}MillionVerifier-Logo.png`,
-            initialValue: empresa.millionverifier_api_key ?? '',
-            placeholder: '••••••••••••••••',
-            docsUrl: 'https://millionverifier.com',
-            onSave: (key: string) => saveApiKey('millionverifier_api_key', key)
-        }
-        // Para agregar una nueva API: copiar el objeto de arriba y añadirlo aquí
-    ];
+    const currentProvider: 'apollo' | 'prospeo' = (empresa.enrichment_provider as 'apollo' | 'prospeo') || 'apollo';
 
     return (
         <div className="space-y-6 max-w-2xl">
@@ -196,11 +180,101 @@ export default function Apis() {
                 </p>
             </div>
 
-            <div className="space-y-4">
-                {apis.map(api => (
-                    <ApiKeyCard key={api.id} {...api} />
-                ))}
-            </div>
+            {/* ── Proveedor de Enriquecimiento ─────────────────────────────── */}
+            <Card>
+                <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border bg-muted">
+                            <Zap className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-base">Proveedor de Enriquecimiento</CardTitle>
+                            <CardDescription className="mt-0.5 text-xs">
+                                Selecciona qué API usará la extensión para extraer datos de perfiles LinkedIn.
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={() => saveProvider('apollo')}
+                            className={`flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors ${
+                                currentProvider === 'apollo'
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                    : 'border-border hover:border-muted-foreground/40'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between w-full">
+                                <img src={`${import.meta.env.BASE_URL}Apollo-Logo.png`} alt="Apollo" className="h-6 object-contain" />
+                                {currentProvider === 'apollo' && (
+                                    <Badge variant="default" className="text-xs">Activo</Badge>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium">Apollo.io</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Teléfono vía webhook async. Requiere plan Organization.
+                                </p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => saveProvider('prospeo')}
+                            className={`flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors ${
+                                currentProvider === 'prospeo'
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                    : 'border-border hover:border-muted-foreground/40'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between w-full">
+                                <span className="text-sm font-semibold tracking-tight">Prospeo</span>
+                                {currentProvider === 'prospeo' && (
+                                    <Badge variant="default" className="text-xs">Activo</Badge>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium">Prospeo.io</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Teléfono sincrónico en la misma respuesta. Desde $39/mes.
+                                </p>
+                            </div>
+                        </button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* ── Claves de API ────────────────────────────────────────────── */}
+            <ApiKeyCard
+                title="Apollo.io"
+                description="Enriquecimiento de perfiles de LinkedIn — contactos, emails y datos laborales."
+                logoUrl={`${import.meta.env.BASE_URL}Apollo-Logo.png`}
+                initialValue={empresa.apollo_api_key ?? ''}
+                placeholder="sk_..."
+                docsUrl="https://app.apollo.io"
+                onSave={(key) => saveApiKey('apollo_api_key', key)}
+            />
+
+            <ApiKeyCard
+                title="Prospeo.io"
+                description="Alternativa a Apollo con teléfono sincrónico. Desde plan Starter ($39/mes)."
+                Icon={Zap}
+                iconClass="text-orange-400"
+                initialValue={empresa.prospeo_api_key ?? ''}
+                placeholder="••••••••••••••••"
+                docsUrl="https://prospeo.io"
+                onSave={(key) => saveApiKey('prospeo_api_key', key)}
+            />
+
+            <ApiKeyCard
+                title="MillionVerifier"
+                description="Verificación de validez de emails antes de guardarlos en el sheet."
+                logoUrl={`${import.meta.env.BASE_URL}MillionVerifier-Logo.png`}
+                initialValue={empresa.millionverifier_api_key ?? ''}
+                placeholder="••••••••••••••••"
+                docsUrl="https://millionverifier.com"
+                onSave={(key) => saveApiKey('millionverifier_api_key', key)}
+            />
         </div>
     );
 }

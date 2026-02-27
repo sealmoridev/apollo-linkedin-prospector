@@ -11,6 +11,8 @@ export interface EmpresaDetail {
     tenant_api_key: string;
     apollo_api_key: string | null;
     millionverifier_api_key: string | null;
+    prospeo_api_key: string | null;
+    enrichment_provider: 'apollo' | 'prospeo';
     logo_url: string | null;
     key_active: boolean;
     createdAt: string;
@@ -160,7 +162,7 @@ export const getEmpresa = async (id: string): Promise<EmpresaDetail> => {
 
 export const updateEmpresa = async (
     id: string,
-    data: { nombre?: string; apollo_api_key?: string; millionverifier_api_key?: string; logo_url?: string }
+    data: { nombre?: string; apollo_api_key?: string; millionverifier_api_key?: string; prospeo_api_key?: string; enrichment_provider?: 'apollo' | 'prospeo'; logo_url?: string }
 ): Promise<EmpresaDetail> => {
     const res = await fetch(`${API_URL}/admin/empresas/${id}`, {
         method: 'PUT',

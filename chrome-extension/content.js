@@ -295,6 +295,7 @@ const initializeWidgetLogic = async () => {
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
     let hasExtractedCurrentProfile = false; // Bandera para State 3
+    let currentEnrichmentProvider = 'apollo'; // 'apollo' | 'prospeo' — viene del servidor
 
     // --- ONBOARDING ---
 
@@ -531,7 +532,7 @@ const initializeWidgetLogic = async () => {
             emailBadge.style.display = 'none';
         }
 
-        // Phone: show if Apollo returned it, else offer "Solicitar" button
+        // Phone: show if returned, else offer "Solicitar" button (Apollo only)
         const phoneEl = document.getElementById('apDataPhone');
         const phBadge = document.getElementById('apPhoneBadge');
         if (leadData.phoneNumber) {
@@ -541,10 +542,15 @@ const initializeWidgetLogic = async () => {
         } else {
             phoneEl.textContent = '—';
             if (phBadge) phBadge.style.display = 'none';
+            // Only show "Solicitar" button for Apollo tenants (Prospeo is synchronous)
             if (requestPhoneBtn) {
-                requestPhoneBtn.style.display = 'flex';
-                requestPhoneBtn.disabled = false;
-                requestPhoneBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Solicitar';
+                if (currentEnrichmentProvider === 'apollo') {
+                    requestPhoneBtn.style.display = 'flex';
+                    requestPhoneBtn.disabled = false;
+                    requestPhoneBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Solicitar';
+                } else {
+                    requestPhoneBtn.style.display = 'none';
+                }
             }
         }
 
@@ -825,6 +831,7 @@ const initializeWidgetLogic = async () => {
             }
 
             if (data.success && data.data) {
+                currentEnrichmentProvider = data.provider || 'apollo';
                 showPreviewState(data.data);
             }
         } catch (error) {
