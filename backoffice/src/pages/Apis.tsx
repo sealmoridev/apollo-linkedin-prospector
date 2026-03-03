@@ -10,6 +10,37 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Badge } from '../components/ui/badge';
 import { Eye, EyeOff, Zap } from 'lucide-react';
 
+// ─── Inline Toggle (no Radix Switch needed) ────────────────────────────────
+
+interface ToggleProps {
+    checked: boolean;
+    disabled?: boolean;
+    onChange: (val: boolean) => void;
+    label: string;
+}
+
+function Toggle({ checked, disabled, onChange, label }: ToggleProps) {
+    return (
+        <label className={`flex items-center gap-1.5 text-xs select-none ${disabled ? 'opacity-40' : 'cursor-pointer'}`}>
+            <button
+                type="button"
+                role="switch"
+                aria-checked={checked}
+                disabled={disabled}
+                onClick={() => !disabled && onChange(!checked)}
+                className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none ${
+                    checked ? 'bg-primary' : 'bg-muted-foreground/30'
+                } ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+                <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow transition-transform ${
+                    checked ? 'translate-x-[14px]' : 'translate-x-[2px]'
+                }`} />
+            </button>
+            {label}
+        </label>
+    );
+}
+
 // ─── ApiKeyCard — reusable, independiente por integración ─────────────────────
 
 interface ApiKeyCardProps {
@@ -22,11 +53,12 @@ interface ApiKeyCardProps {
     placeholder: string;
     docsUrl?: string;
     onSave: (key: string) => Promise<void>;
+    children?: React.ReactNode;
 }
 
 function ApiKeyCard({
     title, description, logoUrl, Icon, iconClass,
-    initialValue, placeholder, docsUrl, onSave
+    initialValue, placeholder, docsUrl, onSave, children
 }: ApiKeyCardProps) {
     const [value, setValue] = useState(initialValue);
     const [show, setShow] = useState(false);
@@ -111,8 +143,43 @@ function ApiKeyCard({
                         </p>
                     )}
                 </form>
+                {children}
             </CardContent>
         </Card>
+    );
+}
+
+// ─── CapabilityToggles — "Respaldo para:" section inside a backup provider card ──
+
+interface CapabilityTogglesProps {
+    providerId: string;
+    hasKey: boolean;
+    emailEnabled: boolean;
+    phoneEnabled: boolean;
+    onToggle: (field: 'email' | 'phone', val: boolean) => void;
+}
+
+function CapabilityToggles({ providerId: _pid, hasKey, emailEnabled, phoneEnabled, onToggle }: CapabilityTogglesProps) {
+    return (
+        <div className="mt-4 pt-3 border-t border-border">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Respaldo para:
+            </p>
+            <div className="flex items-center gap-4">
+                <Toggle
+                    checked={emailEnabled}
+                    disabled={!hasKey}
+                    onChange={val => onToggle('email', val)}
+                    label="Email"
+                />
+                <Toggle
+                    checked={phoneEnabled}
+                    disabled={!hasKey}
+                    onChange={val => onToggle('phone', val)}
+                    label="Teléfono"
+                />
+            </div>
+        </div>
     );
 }
 
@@ -124,6 +191,7 @@ export default function Apis() {
 
     const [empresa, setEmpresa] = useState<EmpresaDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [providerConfig, setProviderConfig] = useState<Record<string, { email: boolean; phone: boolean }>>({});
 
     // Cleanup on unmount (SA only)
     useEffect(() => {
@@ -136,6 +204,7 @@ export default function Apis() {
         fetch
             .then(emp => {
                 setEmpresa(emp);
+                setProviderConfig(emp.provider_config ?? {});
                 if (empresaId) setActiveEmpresa({ id: emp.id, nombre: emp.nombre, logo_url: emp.logo_url });
             })
             .catch(() => toast.error('Error al cargar APIs'))
@@ -158,6 +227,27 @@ export default function Apis() {
         setEmpresa(prev => prev ? { ...prev, ...updated } : updated);
         const names: Record<string, string> = { apollo: 'Apollo.io', prospeo: 'Prospeo', findymail: 'Findymail', leadmagic: 'LeadMagic' };
         toast.success(`Proveedor principal: ${names[provider]}`);
+    };
+
+    const toggleCapability = async (providerId: string, field: 'email' | 'phone', val: boolean) => {
+        if (!empresa) return;
+        const current = providerConfig[providerId] ?? { email: true, phone: true };
+        const updated = { ...current, [field]: val };
+        const newConfig = { ...providerConfig, [providerId]: updated };
+        setProviderConfig(newConfig);
+        try {
+            await updateEmpresa(empresa.id, { provider_config: newConfig });
+        } catch (err: any) {
+            // Revert on failure
+            setProviderConfig(providerConfig);
+            toast.error(err.message || 'Error al guardar configuración');
+        }
+    };
+
+    const getCapability = (providerId: string, field: 'email' | 'phone') => {
+        const cfg = providerConfig[providerId];
+        if (!cfg) return true; // default: enabled
+        return cfg[field] !== false;
     };
 
     if (loading) {
@@ -255,29 +345,51 @@ export default function Apis() {
                 placeholder="••••••••••••••••"
                 docsUrl="https://prospeo.io"
                 onSave={(key) => saveApiKey('prospeo_api_key', key)}
-            />
+            >
+                <CapabilityToggles
+                    providerId="prospeo"
+                    hasKey={!!empresa.prospeo_api_key}
+                    emailEnabled={getCapability('prospeo', 'email')}
+                    phoneEnabled={getCapability('prospeo', 'phone')}
+                    onToggle={(field, val) => toggleCapability('prospeo', field, val)}
+                />
+            </ApiKeyCard>
 
             <ApiKeyCard
                 title="Findymail"
                 description="Email por LinkedIn URL directo. 1 crédito/email encontrado. $49/mes."
-                Icon={Zap}
-                iconClass="text-blue-400"
+                logoUrl={`${import.meta.env.BASE_URL}findymail-logo.png`}
                 initialValue={empresa.findymail_api_key ?? ''}
                 placeholder="••••••••••••••••"
                 docsUrl="https://findymail.com"
                 onSave={(key) => saveApiKey('findymail_api_key', key)}
-            />
+            >
+                <CapabilityToggles
+                    providerId="findymail"
+                    hasKey={!!empresa.findymail_api_key}
+                    emailEnabled={getCapability('findymail', 'email')}
+                    phoneEnabled={getCapability('findymail', 'phone')}
+                    onToggle={(field, val) => toggleCapability('findymail', field, val)}
+                />
+            </ApiKeyCard>
 
             <ApiKeyCard
                 title="LeadMagic"
                 description="Email (nombre+dominio) + teléfono directo (5 créditos/teléfono). $99/mes."
-                Icon={Zap}
-                iconClass="text-purple-400"
+                logoUrl={`${import.meta.env.BASE_URL}leadmagic-logo.jpeg`}
                 initialValue={empresa.leadmagic_api_key ?? ''}
                 placeholder="••••••••••••••••"
                 docsUrl="https://leadmagic.io"
                 onSave={(key) => saveApiKey('leadmagic_api_key', key)}
-            />
+            >
+                <CapabilityToggles
+                    providerId="leadmagic"
+                    hasKey={!!empresa.leadmagic_api_key}
+                    emailEnabled={getCapability('leadmagic', 'email')}
+                    phoneEnabled={getCapability('leadmagic', 'phone')}
+                    onToggle={(field, val) => toggleCapability('leadmagic', field, val)}
+                />
+            </ApiKeyCard>
 
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">Verificación</p>
 

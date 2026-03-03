@@ -18,6 +18,7 @@ model Empresa {
   enrichment_provider     String          @default("apollo")
   logo_url                String?
   key_active              Boolean         @default(true)
+  provider_config         Json?
 
   extensionUsers          ExtensionUser[]
   adminUsers              AdminUser[]

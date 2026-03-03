@@ -22,6 +22,7 @@ let hasExtractedCurrentProfile = false;
 let currentEnrichmentProvider = 'apollo';
 let configuredProviders = [];
 let triedProviders = { email: new Set(), phone: new Set() };
+let cascadeResults = { email: [], phone: [] };
 let apiUrl = 'https://mrprospect.app';
 let tenantApiKey = '';
 let lastProfileName = 'Prospecto';
@@ -180,10 +181,48 @@ const getProviderIconUrl = (providerId) => {
         }
     };
 
+    // ── renderCascadeBadges: renders accumulated provider result badges ─────────
+
+    const renderCascadeBadges = (field) => {
+        const containerId = field === 'email' ? 'apCascadeEmail' : 'apCascadePhone';
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const results = cascadeResults[field];
+        if (results.length === 0) return;
+
+        // Remove existing badge wrap, then re-render
+        const existingWrap = container.querySelector('.ap-cascade-badge-wrap');
+        if (existingWrap) existingWrap.remove();
+
+        const wrap = document.createElement('div');
+        wrap.className = 'ap-cascade-badge-wrap';
+
+        results.forEach(r => {
+            const badge = document.createElement('span');
+            badge.className = `ap-cascade-badge ${r.found ? 'ap-cascade-badge-ok' : 'ap-cascade-badge-fail'}`;
+            const iconUrl = getProviderIconUrl(r.providerId);
+            badge.innerHTML = `<img src="${iconUrl}" style="width:10px;height:10px;object-fit:contain;"> ${r.name} ${r.found ? '✓' : '✗'}`;
+            wrap.appendChild(badge);
+        });
+
+        container.insertBefore(wrap, container.firstChild);
+        container.style.display = 'block';
+    };
+
+    // ── renderCascadeButtons: renders the "Buscar con ▾" dropdown trigger ──────
+    // Does NOT clear badge wrap — only updates the trigger button.
+
     const renderCascadeButtons = (field) => {
         const containerId = field === 'email' ? 'apCascadeEmail' : 'apCascadePhone';
         const container = document.getElementById(containerId);
         if (!container) return;
+
+        // Remove only the previous trigger and dropdown, keep badge wrap
+        const existingTrigger = container.querySelector('.ap-btn-validate');
+        const existingDropdown = container.querySelector('.ap-cascade-dropdown');
+        if (existingTrigger) existingTrigger.remove();
+        if (existingDropdown) existingDropdown.remove();
 
         const available = configuredProviders.filter(p =>
             p.fields.includes(field) &&
@@ -192,16 +231,18 @@ const getProviderIconUrl = (providerId) => {
         );
 
         if (available.length === 0) {
-            container.style.display = 'none';
+            // No more providers — only hide container if there are no badges either
+            if (cascadeResults[field].length === 0) {
+                container.style.display = 'none';
+            }
             return;
         }
 
         container.style.display = 'block';
-        container.innerHTML = '';
 
         const trigger = document.createElement('button');
         trigger.className = 'ap-btn-validate';
-        trigger.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:10px; padding:3px 8px;';
+        trigger.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:10px; padding:3px 8px; position:relative;';
         trigger.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar con <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
         container.appendChild(trigger);
 
@@ -248,7 +289,16 @@ const getProviderIconUrl = (providerId) => {
         const valueEl = document.getElementById(field === 'email' ? 'apDataEmail' : 'apDataPhone');
 
         if (container) {
-            container.innerHTML = `<span style="font-size:10px; color:#94a3b8; display:flex; align-items:center; gap:4px;"><span class="ap-loader" style="display:inline-block; border-color:#94a3b8 transparent transparent transparent; width:10px; height:10px;"></span> Buscando con ${provider.name}...</span>`;
+            // Clear only trigger/dropdown, keep badge wrap
+            const oldTrigger = container.querySelector('.ap-btn-validate');
+            const oldDropdown = container.querySelector('.ap-cascade-dropdown');
+            if (oldTrigger) oldTrigger.remove();
+            if (oldDropdown) oldDropdown.remove();
+            const loadingSpan = document.createElement('span');
+            loadingSpan.className = 'ap-cascade-loading';
+            loadingSpan.style.cssText = 'font-size:10px; color:#94a3b8; display:flex; align-items:center; gap:4px;';
+            loadingSpan.innerHTML = `<span class="ap-loader" style="display:inline-block; border-color:#94a3b8 transparent transparent transparent; width:10px; height:10px;"></span> Buscando con ${provider.name}...`;
+            container.appendChild(loadingSpan);
         }
 
         triedProviders[field].add(provider.id);
@@ -274,8 +324,11 @@ const getProviderIconUrl = (providerId) => {
             });
 
             const data = await res.json();
+            const found = !!(data.found && data.value);
 
-            if (data.found && data.value) {
+            cascadeResults[field].push({ providerId: provider.id, name: provider.name, found });
+
+            if (found) {
                 if (field === 'email') {
                     extractedLeadData.email = data.value;
                     extractedLeadData.primaryEmail = data.value;
@@ -293,22 +346,21 @@ const getProviderIconUrl = (providerId) => {
                     if (phoneBtn) phoneBtn.style.display = 'none';
                 }
                 if (container) {
-                    const iconUrl = getProviderIconUrl(provider.id);
-                    container.innerHTML = `<span style="display:flex; align-items:center; gap:4px; font-size:10px; color:#16a34a; background:#dcfce7; border-radius:20px; padding:2px 7px; width:fit-content;"><img src="${iconUrl}" style="width:11px;height:11px;object-fit:contain;"> ${provider.name} ✓</span>`;
+                    // Clear loading state then render final badges (no button)
+                    container.innerHTML = '';
+                    renderCascadeBadges(field);
                 }
             } else {
                 if (container) {
                     container.innerHTML = '';
-                    const notFoundLabel = document.createElement('span');
-                    notFoundLabel.style.cssText = 'font-size:10px; color:#94a3b8;';
-                    notFoundLabel.textContent = `${provider.name}: no encontrado`;
-                    container.appendChild(notFoundLabel);
+                    renderCascadeBadges(field);
                 }
-                setTimeout(() => renderCascadeButtons(field), 1200);
+                setTimeout(() => renderCascadeButtons(field), 0);
             }
         } catch (err) {
             if (container) {
                 container.innerHTML = '';
+                renderCascadeBadges(field);
                 renderCascadeButtons(field);
             }
         }
@@ -320,6 +372,7 @@ const getProviderIconUrl = (providerId) => {
         extractSection.style.display = 'flex';
         previewSection.style.display = 'none';
         extractedLeadData = null;
+        cascadeResults = { email: [], phone: [] };
 
         if (saveBtn) {
             saveBtn.disabled = false;
@@ -467,9 +520,18 @@ const getProviderIconUrl = (providerId) => {
             emailBadge.style.display = 'none';
         }
 
+        // Provider name lookup helper
+        const providerNames = { apollo: 'Apollo', prospeo: 'Prospeo', findymail: 'Findymail', leadmagic: 'LeadMagic' };
+
         // Cascade: email
         if (!leadData.email && !leadData.primaryEmail) {
+            cascadeResults.email.push({
+                providerId: currentEnrichmentProvider,
+                name: providerNames[currentEnrichmentProvider] || currentEnrichmentProvider,
+                found: false
+            });
             triedProviders.email.add(currentEnrichmentProvider);
+            renderCascadeBadges('email');
             renderCascadeButtons('email');
         } else {
             const cascadeEl = document.getElementById('apCascadeEmail');
@@ -489,7 +551,13 @@ const getProviderIconUrl = (providerId) => {
             phoneEl.textContent = '—';
             if (phBadge) phBadge.style.display = 'none';
             if (requestPhoneBtn) requestPhoneBtn.style.display = 'none';
+            cascadeResults.phone.push({
+                providerId: currentEnrichmentProvider,
+                name: providerNames[currentEnrichmentProvider] || currentEnrichmentProvider,
+                found: false
+            });
             triedProviders.phone.add(currentEnrichmentProvider);
+            renderCascadeBadges('phone');
             renderCascadeButtons('phone');
         }
 

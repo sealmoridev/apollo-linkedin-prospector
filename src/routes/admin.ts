@@ -404,7 +404,7 @@ router.get('/empresas/:id', requireAdmin, requireAdminOwner('id'), async (req: R
 /** Actualizar empresa (nombre, API keys, logo_url, proveedor de enriquecimiento) */
 router.put('/empresas/:id', requireAdmin, requireAdminOwner('id'), async (req: Request, res: Response) => {
     try {
-        const { nombre, apollo_api_key, millionverifier_api_key, prospeo_api_key, findymail_api_key, leadmagic_api_key, enrichment_provider, logo_url } = req.body;
+        const { nombre, apollo_api_key, millionverifier_api_key, prospeo_api_key, findymail_api_key, leadmagic_api_key, enrichment_provider, logo_url, provider_config } = req.body;
 
         const data: any = {};
         if (nombre !== undefined) data.nombre = nombre;
@@ -415,6 +415,7 @@ router.put('/empresas/:id', requireAdmin, requireAdminOwner('id'), async (req: R
         if (leadmagic_api_key !== undefined) data.leadmagic_api_key = leadmagic_api_key || null;
         if (enrichment_provider !== undefined) data.enrichment_provider = enrichment_provider;
         if (logo_url !== undefined) data.logo_url = logo_url || null;
+        if (provider_config !== undefined) data.provider_config = provider_config;
 
         const empresa = await prisma.empresa.update({
             where: { id: req.params.id },
