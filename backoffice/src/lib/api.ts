@@ -58,6 +58,8 @@ export interface LeadData {
     linkedin_url: string | null;
     email_status: string | null;
     enrichment_provider: string | null;
+    email_provider: string | null;
+    phone_provider: string | null;
     sdr_id: string | null;
     sdr_name: string | null;
     sdr_mail: string | null;

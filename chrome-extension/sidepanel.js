@@ -228,7 +228,6 @@ const getProviderIconUrl = (providerId) => {
 
         const available = configuredProviders.filter(p =>
             p.fields.includes(field) &&
-            p.id !== currentEnrichmentProvider &&
             !triedProviders[field].has(p.id)
         );
 
@@ -952,6 +951,17 @@ const getProviderIconUrl = (providerId) => {
         clearMessage();
 
         try {
+            // Determine which provider actually found each field
+            const emailCascadeWin = cascadeResults.email.find(r => r.found);
+            const emailProvider = emailCascadeWin
+                ? emailCascadeWin.providerId
+                : (extractedLeadData.primaryEmail || extractedLeadData.email) ? currentEnrichmentProvider : null;
+
+            const phoneCascadeWin = cascadeResults.phone.find(r => r.found);
+            const phoneProvider = phoneCascadeWin
+                ? phoneCascadeWin.providerId
+                : extractedLeadData.phoneNumber ? currentEnrichmentProvider : null;
+
             const response = await fetch(`${apiUrl}/api/sheets/save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -961,7 +971,9 @@ const getProviderIconUrl = (providerId) => {
                     lead: extractedLeadData,
                     sheetName: customSheetName,
                     sesion_id: currentSesionId,
-                    provider: currentEnrichmentProvider
+                    provider: currentEnrichmentProvider,
+                    emailProvider,
+                    phoneProvider
                 })
             });
 

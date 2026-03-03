@@ -543,7 +543,7 @@ app.post('/api/sheets/create', async (req: Request, res: Response) => {
 // Guardar datos en una hoja específica
 app.post('/api/sheets/save', async (req: Request, res: Response) => {
   try {
-    const { userId = 'default', spreadsheetId, lead, sheetName, sesion_id, provider = 'apollo' } = req.body;
+    const { userId = 'default', spreadsheetId, lead, sheetName, sesion_id, provider = 'apollo', emailProvider, phoneProvider } = req.body;
 
     if (!spreadsheetId || !lead) {
       return res.status(400).json({
@@ -599,6 +599,8 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
                 linkedin_url: lead.linkedinUrl || null,
                 email_status: rawStatus || null,
                 enrichment_provider: provider || 'apollo',
+                email_provider: emailProvider || provider || 'apollo',
+                phone_provider: phoneProvider || null,
                 sdr_id: extensionUser.id,
                 sdr_name: extensionUser.nombre || null,
                 sdr_mail: extensionUser.email

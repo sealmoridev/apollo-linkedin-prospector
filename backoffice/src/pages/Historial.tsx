@@ -545,22 +545,40 @@ export default function Historial() {
                                             </div>
                                         </>
                                     )}
-                                    {ld.enrichment_provider && (
-                                        <>
-                                            <Separator />
-                                            <div className="space-y-2">
-                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proveedor</p>
-                                                <div className="flex items-center gap-2">
-                                                    <img
-                                                        src={`${import.meta.env.BASE_URL}${{ apollo: 'apolloicon.png', prospeo: 'prospeoicon.png', findymail: 'findymail-logo.png', leadmagic: 'leadmagic-logo.jpeg' }[ld.enrichment_provider] ?? 'apolloicon.png'}`}
-                                                        alt={ld.enrichment_provider}
-                                                        className="h-5 w-5 object-contain rounded"
-                                                    />
-                                                    <span className="text-sm capitalize">{ld.enrichment_provider}</span>
-                                                </div>
+                                    {ld.enrichment_provider && (() => {
+                                        const iconMap: Record<string, string> = { apollo: 'apolloicon.png', prospeo: 'prospeoicon.png', findymail: 'findymail-logo.png', leadmagic: 'leadmagic-logo.jpeg' };
+                                        const nameMap: Record<string, string> = { apollo: 'Apollo', prospeo: 'Prospeo', findymail: 'Findymail', leadmagic: 'LeadMagic' };
+                                        const ProviderChip = ({ id }: { id: string }) => (
+                                            <div className="flex items-center gap-1.5">
+                                                <img src={`${import.meta.env.BASE_URL}${iconMap[id] ?? 'apolloicon.png'}`} alt={id} className="h-4 w-4 object-contain rounded" />
+                                                <span className="text-sm capitalize">{nameMap[id] ?? id}</span>
                                             </div>
-                                        </>
-                                    )}
+                                        );
+                                        return (
+                                            <>
+                                                <Separator />
+                                                <div className="space-y-2">
+                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vía de captura</p>
+                                                    <div className="grid grid-cols-[80px_1fr] gap-y-1.5 text-sm items-center">
+                                                        <span className="text-muted-foreground text-xs">Principal</span>
+                                                        <ProviderChip id={ld.enrichment_provider!} />
+                                                        {ld.email_provider && (
+                                                            <>
+                                                                <span className="text-muted-foreground text-xs">Email</span>
+                                                                <ProviderChip id={ld.email_provider} />
+                                                            </>
+                                                        )}
+                                                        {ld.phone_provider && (
+                                                            <>
+                                                                <span className="text-muted-foreground text-xs">Teléfono</span>
+                                                                <ProviderChip id={ld.phone_provider} />
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </>
                         );
