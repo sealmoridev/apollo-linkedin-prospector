@@ -11,6 +11,8 @@ import Apis from './pages/Apis';
 import Historial from './pages/Historial';
 import Usuarios from './pages/Usuarios';
 import ExtensionChrome from './pages/ExtensionChrome';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -25,6 +27,8 @@ function App() {
         <BrowserRouter basename="/admin">
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/terminos" element={<Terms />} />
+            <Route path="/privacidad" element={<Privacy />} />
 
             <Route path="/" element={<Layout />}>
               <Route index element={<RootRedirect />} />

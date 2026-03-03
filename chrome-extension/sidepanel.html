@@ -66,6 +66,22 @@
 
     /* Save, cancel, result don't shrink — always visible at bottom */
     #apSaveBtn, #apCancelBtn, #apResultDiv { flex-shrink: 0; }
+
+    /* Onboarding: fit inside the padded body (no negative-margin clip) */
+    #apOnboarding {
+      flex: 1;
+      min-height: 0 !important;
+      margin: 0 !important;
+      border-radius: 10px !important;
+      gap: 16px !important;
+      justify-content: flex-start !important;
+      overflow-y: auto;
+      padding: 24px 18px !important;
+    }
+    #apOnboarding .ap-ob-logo-ring { width: 54px !important; height: 54px !important; }
+    #apOnboarding .ap-ob-logo-img  { width: 30px !important; height: 30px !important; }
+    #apOnboarding .ap-ob-title     { font-size: 19px !important; }
+    #apOnboarding .ap-ob-subtitle  { font-size: 12px !important; }
   </style>
 </head>
 <body>

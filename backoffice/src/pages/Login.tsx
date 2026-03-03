@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { login } from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -110,9 +110,15 @@ export default function Login() {
                         </Button>
                     </form>
 
-                    <p className="text-center text-xs text-muted-foreground">
-                        MR. PROSPECT © {new Date().getFullYear()}
-                    </p>
+                    <div className="flex flex-col items-center gap-3 mt-8">
+                        <div className="flex gap-4 text-xs text-muted-foreground">
+                            <Link to="/terminos" className="hover:text-foreground transition-colors">Términos</Link>
+                            <Link to="/privacidad" className="hover:text-foreground transition-colors">Privacidad</Link>
+                        </div>
+                        <p className="text-center text-xs text-muted-foreground">
+                            MR. PROSPECT © {new Date().getFullYear()}
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

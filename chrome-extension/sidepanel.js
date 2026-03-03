@@ -25,6 +25,7 @@ let triedProviders = { email: new Set(), phone: new Set() };
 let apiUrl = 'https://mrprospect.app';
 let tenantApiKey = '';
 let lastProfileName = 'Prospecto';
+let authPollInterval = null;
 
 // ─── Provider icon paths (relative — works from extension page) ──────────────
 const getProviderIconUrl = (providerId) => {
@@ -594,6 +595,9 @@ const getProviderIconUrl = (providerId) => {
             loginBtn.onclick = null;
 
             if (isAuthenticated) {
+                // Stop polling — auth confirmed
+                if (authPollInterval) { clearInterval(authPollInterval); authPollInterval = null; }
+
                 const storageConfig = await chrome.storage.sync.get(['defaultSheetId', 'defaultSheetName']);
                 const hasDefaultSheet = storageConfig?.defaultSheetId;
 
@@ -655,6 +659,13 @@ const getProviderIconUrl = (providerId) => {
                         showMessage('Error de conexión con el Servidor.', true);
                     }
                 };
+
+                // Poll every 4 s so panel auto-refreshes when OAuth completes in another tab
+                if (!authPollInterval) {
+                    authPollInterval = setInterval(async () => {
+                        await checkAuthStatus().catch(() => {});
+                    }, 4000);
+                }
             }
         } catch (err) {
             console.error('Auth error:', err);
