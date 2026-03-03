@@ -436,7 +436,7 @@ export default function Historial() {
                                                 {prov ? (
                                                     <div className="flex items-center gap-1.5">
                                                         <img
-                                                            src={`${import.meta.env.BASE_URL}${prov === 'prospeo' ? 'prospeoicon.png' : 'apolloicon.png'}`}
+                                                            src={`${import.meta.env.BASE_URL}${{ apollo: 'apolloicon.png', prospeo: 'prospeoicon.png', findymail: 'findymail-logo.png', leadmagic: 'leadmagic-logo.jpeg' }[prov] ?? 'apolloicon.png'}`}
                                                             alt={prov}
                                                             className="h-4 w-4 object-contain rounded"
                                                         />
@@ -552,7 +552,7 @@ export default function Historial() {
                                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proveedor</p>
                                                 <div className="flex items-center gap-2">
                                                     <img
-                                                        src={`${import.meta.env.BASE_URL}${ld.enrichment_provider === 'prospeo' ? 'prospeoicon.png' : 'apolloicon.png'}`}
+                                                        src={`${import.meta.env.BASE_URL}${{ apollo: 'apolloicon.png', prospeo: 'prospeoicon.png', findymail: 'findymail-logo.png', leadmagic: 'leadmagic-logo.jpeg' }[ld.enrichment_provider] ?? 'apolloicon.png'}`}
                                                         alt={ld.enrichment_provider}
                                                         className="h-5 w-5 object-contain rounded"
                                                     />

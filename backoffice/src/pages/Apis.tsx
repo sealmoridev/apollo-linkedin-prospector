@@ -177,8 +177,8 @@ export default function Apis() {
     const enrichmentProviders: { id: typeof currentProvider; logo: string; name: string; desc: string }[] = [
         { id: 'apollo',    logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'Apollo.io',  desc: 'Email + Teléfono async webhook.' },
         { id: 'prospeo',   logo: `${import.meta.env.BASE_URL}prospeoicon.png`,  name: 'Prospeo',    desc: 'Email + Teléfono sincrónico. $39/mes.' },
-        { id: 'findymail', logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'Findymail',  desc: 'Email por LinkedIn URL. $49/mes.' },
-        { id: 'leadmagic', logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'LeadMagic',  desc: 'Email + Teléfono. 300 req/min. $99/mes.' },
+        { id: 'findymail', logo: `${import.meta.env.BASE_URL}findymail-logo.png`,  name: 'Findymail',  desc: 'Email por LinkedIn URL. $49/mes.' },
+        { id: 'leadmagic', logo: `${import.meta.env.BASE_URL}leadmagic-logo.jpeg`, name: 'LeadMagic',  desc: 'Email + Teléfono. 300 req/min. $99/mes.' },
     ];
 
     return (

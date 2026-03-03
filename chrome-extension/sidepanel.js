@@ -32,8 +32,8 @@ const getProviderIconUrl = (providerId) => {
     const iconMap = {
         apollo:    'assets/apolloicon.png',
         prospeo:   'assets/prospeoicon.png',
-        findymail: 'assets/apolloicon.png',
-        leadmagic: 'assets/apolloicon.png',
+        findymail: 'assets/findymail-logo.png',
+        leadmagic: 'assets/leadmagic-logo.jpeg',
     };
     return iconMap[providerId] || '';
 };
