@@ -428,6 +428,73 @@
             color: #991b1b;
             border: 1px solid #fecaca;
         }
+
+        /* ── Compact layout for side panel (narrow viewport) ───────────────── */
+        @media (max-width: 480px) {
+            body { background-color: #ffffff; }
+
+            .back-to-panel {
+                padding: 8px 10px;
+                margin: 8px 0 0 2px;
+                font-size: 12px;
+                gap: 4px;
+            }
+
+            .container {
+                margin: 6px 8px 12px;
+                padding: 16px 14px;
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            }
+
+            .header {
+                gap: 8px;
+                margin-bottom: 16px;
+                padding-bottom: 14px;
+            }
+
+            .header img.logo { width: 28px; height: 28px; }
+
+            h1 { font-size: 16px; }
+
+            .section { margin-bottom: 16px; }
+
+            .section h2 {
+                font-size: 13px;
+                margin-bottom: 8px;
+            }
+
+            .card { padding: 12px; }
+
+            label { font-size: 13px; }
+
+            input[type="text"],
+            input[type="password"] {
+                padding: 10px;
+                font-size: 13px;
+            }
+
+            .custom-select-trigger {
+                padding: 9px 34px 9px 10px;
+                font-size: 13px;
+                min-height: 38px;
+            }
+
+            .custom-option { padding: 8px 10px; font-size: 12px; }
+
+            .btn {
+                padding: 9px 14px;
+                font-size: 13px;
+            }
+
+            .btn-google { padding: 8px 14px; font-size: 13px; }
+
+            .help-text { font-size: 11px; }
+
+            .tenant-status { font-size: 12px; }
+
+            .auth-status { flex-wrap: wrap; gap: 8px; }
+        }
     </style>
 </head>
 
