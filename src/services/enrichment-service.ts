@@ -1,12 +1,14 @@
 import { ApolloClient } from './apollo-client';
 import { ProspeoClient } from './prospeo-client';
+import { FindymailClient } from './findymail-client';
 import { WebhookServer } from './webhook-server';
 import { validateLinkedInUrl } from '../utils/linkedin-validator';
 import { EnrichedLead, FailedEnrichment, EnrichmentBatchResult } from '../types/index';
 
 export type ProviderConfig =
-  | { provider: 'apollo'; apiKey: string }
-  | { provider: 'prospeo'; apiKey: string };
+  | { provider: 'apollo';    apiKey: string }
+  | { provider: 'prospeo';   apiKey: string }
+  | { provider: 'findymail'; apiKey: string };
 
 /**
  * Servicio de enriquecimiento de leads desde LinkedIn.
@@ -48,8 +50,12 @@ export class EnrichmentService {
 
       if (config.provider === 'prospeo') {
         const prospeoClient = new ProspeoClient(config.apiKey);
-        // Prospeo siempre incluye teléfono de forma sincrónica
+        // Prospeo always returns email + phone in one sync call
         enrichedLead = await prospeoClient.enrichProfile(normalizedUrl);
+      } else if (config.provider === 'findymail') {
+        const findymailClient = new FindymailClient(config.apiKey);
+        // Findymail returns email only as primary (phone = cascade, 10 credits)
+        enrichedLead = await findymailClient.enrichProfile(normalizedUrl);
       } else {
         const apolloClient = new ApolloClient(config.apiKey, this.webhookServer);
         enrichedLead = await apolloClient.enrichProfile(normalizedUrl, {

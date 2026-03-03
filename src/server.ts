@@ -132,22 +132,27 @@ app.get('/api', (req: Request, res: Response) => {
 // Enriquecer un perfil individual
 app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const { linkedinUrl, includePhone = false, sesion_id } = req.body;
+    const { linkedinUrl, sesion_id } = req.body;
     const tenant = req.tenant!;
     const user = req.extensionUser!;
 
-    const provider = (tenant as any).enrichment_provider || 'apollo';
-    const prospeoKey = (tenant as any).prospeo_api_key as string | null;
+    const provider = ((tenant as any).enrichment_provider || 'apollo') as string;
 
-    // Validar que el proveedor esté configurado
-    if (provider === 'prospeo') {
-      if (!prospeoKey) {
-        return res.status(403).json({ error: 'Prospeo API Key no configurada para el tenant.' });
-      }
-    } else {
-      if (!tenant.apollo_api_key) {
-        return res.status(403).json({ error: 'Apollo API Key no configurada para el tenant.' });
-      }
+    // LeadMagic cannot work as a standalone primary (email requires metadata from a prior extraction)
+    if (provider === 'leadmagic') {
+      return res.status(400).json({
+        error: 'LeadMagic no puede usarse como proveedor principal. Configura otro proveedor principal y usa LeadMagic como cascada.',
+      });
+    }
+
+    const apiKeyMap: Record<string, string | null> = {
+      apollo:    (tenant as any).apollo_api_key    || null,
+      prospeo:   (tenant as any).prospeo_api_key   || null,
+      findymail: (tenant as any).findymail_api_key || null,
+    };
+    const apiKey = apiKeyMap[provider];
+    if (!apiKey) {
+      return res.status(403).json({ error: `API Key de ${provider} no configurada para el tenant.` });
     }
 
     if (!linkedinUrl) {
@@ -163,18 +168,16 @@ app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response
       return res.status(400).json({ error: 'Invalid LinkedIn URL', details: validation.error });
     }
 
-    const providerConfig = provider === 'prospeo'
-      ? { provider: 'prospeo' as const, apiKey: prospeoKey! }
-      : { provider: 'apollo' as const, apiKey: tenant.apollo_api_key! };
+    const providerConfig = { provider: provider as any, apiKey };
 
     console.log(`[API] Enriching (${provider}): ${linkedinUrl} by user ${user.id}`);
 
-    // Para Prospeo, siempre incluir teléfono (sincrónico)
+    // Prospeo always fetches phone synchronously; Apollo/Findymail: email only
     const lead = await enrichmentService.enrichProfile(
       providerConfig,
       linkedinUrl,
       user.id,
-      provider === 'prospeo' ? true : includePhone
+      provider === 'prospeo' ? true : false
     );
 
     // Guardar registro de consumo

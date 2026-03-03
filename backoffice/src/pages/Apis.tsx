@@ -264,11 +264,38 @@ export default function Apis() {
 
     const currentProvider = empresa.enrichment_provider || 'apollo';
 
-    const enrichmentProviders: { id: typeof currentProvider; logo: string; name: string; desc: string }[] = [
-        { id: 'apollo',    logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'Apollo.io',  desc: 'Email + Teléfono async webhook.' },
-        { id: 'prospeo',   logo: `${import.meta.env.BASE_URL}prospeoicon.png`,  name: 'Prospeo',    desc: 'Email + Teléfono sincrónico. $39/mes.' },
-        { id: 'findymail', logo: `${import.meta.env.BASE_URL}findymail-logo.png`,  name: 'Findymail',  desc: 'Email por LinkedIn URL. $49/mes.' },
-        { id: 'leadmagic', logo: `${import.meta.env.BASE_URL}leadmagic-logo.jpeg`, name: 'LeadMagic',  desc: 'Email + Teléfono. 300 req/min. $99/mes.' },
+    const enrichmentProviders: {
+        id: typeof currentProvider;
+        logo: string;
+        name: string;
+        primaryCapability: string;
+        cascadeOnly?: boolean;
+    }[] = [
+        {
+            id: 'apollo',
+            logo: `${import.meta.env.BASE_URL}apolloicon.png`,
+            name: 'Apollo.io',
+            primaryCapability: 'Solo Email · Tel. por cascada',
+        },
+        {
+            id: 'prospeo',
+            logo: `${import.meta.env.BASE_URL}prospeoicon.png`,
+            name: 'Prospeo',
+            primaryCapability: 'Email + Teléfono (una sola llamada)',
+        },
+        {
+            id: 'findymail',
+            logo: `${import.meta.env.BASE_URL}findymail-logo.png`,
+            name: 'Findymail',
+            primaryCapability: 'Solo Email · Tel. por cascada',
+        },
+        {
+            id: 'leadmagic',
+            logo: `${import.meta.env.BASE_URL}leadmagic-logo.jpeg`,
+            name: 'LeadMagic',
+            primaryCapability: 'Solo disponible como cascada',
+            cascadeOnly: true,
+        },
     ];
 
     return (
@@ -301,22 +328,29 @@ export default function Apis() {
                         {enrichmentProviders.map(p => (
                             <button
                                 key={p.id}
-                                onClick={() => saveProvider(p.id)}
+                                onClick={() => !p.cascadeOnly && saveProvider(p.id)}
+                                disabled={p.cascadeOnly}
+                                title={p.cascadeOnly ? 'LeadMagic requiere datos previos para email. Úsalo como cascada.' : undefined}
                                 className={`flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
-                                    currentProvider === p.id
-                                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                        : 'border-border hover:border-muted-foreground/40'
+                                    p.cascadeOnly
+                                        ? 'border-border opacity-50 cursor-not-allowed'
+                                        : currentProvider === p.id
+                                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                            : 'border-border hover:border-muted-foreground/40'
                                 }`}
                             >
                                 <div className="flex items-center justify-between w-full">
                                     <img src={p.logo} alt={p.name} className="h-5 object-contain" />
-                                    {currentProvider === p.id && (
-                                        <Badge variant="default" className="text-[10px] py-0">Principal</Badge>
-                                    )}
+                                    {p.cascadeOnly
+                                        ? <Badge variant="secondary" className="text-[10px] py-0">Solo cascada</Badge>
+                                        : currentProvider === p.id
+                                            ? <Badge variant="default" className="text-[10px] py-0">Principal</Badge>
+                                            : null
+                                    }
                                 </div>
                                 <div>
                                     <p className="text-xs font-semibold">{p.name}</p>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">{p.desc}</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">{p.primaryCapability}</p>
                                 </div>
                             </button>
                         ))}

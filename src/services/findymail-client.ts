@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { EnrichedLead } from '../types/index';
 
 export interface FindymailFieldResult {
   found: boolean;
@@ -25,6 +26,59 @@ export class FindymailClient {
       },
       timeout: 30000
     });
+  }
+
+  /**
+   * Full profile enrichment using Findymail as primary provider.
+   * Returns email + basic profile data. Phone is never fetched here
+   * (10 credits/hit — left for cascade if needed).
+   */
+  async enrichProfile(linkedinUrl: string): Promise<EnrichedLead> {
+    try {
+      const res = await this.client.post('/api/search/linkedin', {
+        linkedin_url: linkedinUrl
+      });
+      const d = res.data ?? {};
+      const email = d.email || null;
+      const firstName = d.first_name || null;
+      const lastName = d.last_name || null;
+      const company = d.company || null;
+      const domain = d.domain || null;
+
+      return {
+        linkedinUrl,
+        firstName,
+        lastName,
+        fullName: [firstName, lastName].filter(Boolean).join(' ') || null,
+        email,
+        personalEmail: null,
+        phoneNumber: null,
+        title: null,
+        company,
+        companyDomain: domain,
+        industry: null,
+        location: null,
+        enrichedAt: new Date(),
+        creditsConsumed: email ? 1 : 0,
+        apolloId: null,
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const status = (error as AxiosError).response?.status;
+        if (status === 404 || status === 422) {
+          // Profile not found — return empty lead, don't throw
+          return {
+            linkedinUrl, firstName: null, lastName: null, fullName: null,
+            email: null, personalEmail: null, phoneNumber: null, title: null,
+            company: null, companyDomain: null, industry: null, location: null,
+            enrichedAt: new Date(), creditsConsumed: 0, apolloId: null,
+          };
+        }
+        if (status === 401 || status === 403) throw new Error('Invalid Findymail API key');
+        if (status === 429) throw new Error('Findymail rate limit exceeded');
+      }
+      throw error instanceof Error ? error : new Error('Findymail enrichProfile failed');
+    }
   }
 
   /** Find work email from LinkedIn URL */

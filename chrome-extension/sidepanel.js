@@ -551,13 +551,17 @@ const getProviderIconUrl = (providerId) => {
             phoneEl.textContent = '—';
             if (phBadge) phBadge.style.display = 'none';
             if (requestPhoneBtn) requestPhoneBtn.style.display = 'none';
-            cascadeResults.phone.push({
-                providerId: currentEnrichmentProvider,
-                name: providerNames[currentEnrichmentProvider] || currentEnrichmentProvider,
-                found: false
-            });
             triedProviders.phone.add(currentEnrichmentProvider);
-            renderCascadeBadges('phone');
+            // Only show ✗ badge if the provider actually attempted phone (Prospeo always does)
+            const providerAlwaysTriesPhone = ['prospeo'];
+            if (providerAlwaysTriesPhone.includes(currentEnrichmentProvider)) {
+                cascadeResults.phone.push({
+                    providerId: currentEnrichmentProvider,
+                    name: providerNames[currentEnrichmentProvider] || currentEnrichmentProvider,
+                    found: false
+                });
+                renderCascadeBadges('phone');
+            }
             renderCascadeButtons('phone');
         }
 
