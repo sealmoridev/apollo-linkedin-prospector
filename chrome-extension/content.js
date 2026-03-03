@@ -177,6 +177,7 @@ const widgetHTML = `
                         <button id="apValidateEmailBtn" class="ap-btn-validate" style="display: none;">Validar</button>
                         <div id="apEmailBadge" class="ap-badge" style="display: none;"></div>
                     </div>
+                    <div id="apCascadeEmail" style="position:relative; margin-top:5px; display:none;"></div>
                 </div>
             </div>
             <div class="ap-data-row-modern">
@@ -188,6 +189,7 @@ const widgetHTML = `
                         <button id="apRequestPhoneBtn" class="ap-btn-validate" style="display: none;"></button>
                         <div id="apPhoneBadge" class="ap-badge" style="display: none;"></div>
                     </div>
+                    <div id="apCascadePhone" style="position:relative; margin-top:5px; display:none;"></div>
                 </div>
             </div>
           </div>
@@ -298,7 +300,9 @@ const initializeWidgetLogic = async () => {
     let isAuthenticated = false;
     let extractedLeadData = null; // Almacenamos los datos en memoria antes de guardar
     let hasExtractedCurrentProfile = false; // Bandera para State 3
-    let currentEnrichmentProvider = 'apollo'; // 'apollo' | 'prospeo' — viene del servidor
+    let currentEnrichmentProvider = 'apollo'; // viene del servidor
+    let configuredProviders = []; // [{ id, name, fields }] — cargado al autenticar
+    let triedProviders = { email: new Set(), phone: new Set() }; // trackea intentos por campo
 
     // --- ONBOARDING ---
 
@@ -368,6 +372,196 @@ const initializeWidgetLogic = async () => {
         resultDiv.className = 'ap-result-message';
         resultDiv.textContent = '';
     };
+
+    // ─── Cascade enrichment helpers ────────────────────────────────────────────
+
+    /** Load tenant-configured providers once per session */
+    const loadTenantProviders = async () => {
+        try {
+            const res = await fetch(`${apiUrl}/api/tenant-providers`, {
+                headers: { 'x-api-key': tenantApiKey, 'x-google-id': userId }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            configuredProviders = data.providers || [];
+            currentEnrichmentProvider = data.active || 'apollo';
+        } catch (e) {
+            console.warn('[MRP] Could not load tenant providers:', e);
+        }
+    };
+
+    /** Provider icon URL — uses assets folder */
+    const getProviderIconUrl = (providerId) => {
+        const iconMap = {
+            apollo:    chrome.runtime.getURL('assets/apolloicon.png'),
+            prospeo:   chrome.runtime.getURL('assets/prospeoicon.png'),
+            findymail: chrome.runtime.getURL('assets/apolloicon.png'),
+            leadmagic: chrome.runtime.getURL('assets/apolloicon.png'),
+        };
+        return iconMap[providerId] || '';
+    };
+
+    /**
+     * Renders the "Buscar con▾" dropdown for a field (email|phone).
+     * Shows providers that: (1) are configured, (2) support the field, (3) haven't been tried.
+     * Hides the container when all providers have been tried.
+     */
+    const renderCascadeButtons = (field) => {
+        const containerId = field === 'email' ? 'apCascadeEmail' : 'apCascadePhone';
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // Providers available for this field
+        const available = configuredProviders.filter(p =>
+            p.fields.includes(field) &&
+            p.id !== currentEnrichmentProvider && // main provider already used
+            !triedProviders[field].has(p.id)
+        );
+
+        if (available.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+
+        // Close any open dropdowns first
+        const closeDropdown = () => {
+            const existing = container.querySelector('.ap-cascade-dropdown');
+            if (existing) existing.remove();
+        };
+
+        // Rebuild trigger button
+        container.innerHTML = '';
+        const trigger = document.createElement('button');
+        trigger.className = 'ap-btn-validate';
+        trigger.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:10px; padding:3px 8px;';
+        trigger.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar con <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+        container.appendChild(trigger);
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const existing = container.querySelector('.ap-cascade-dropdown');
+            if (existing) { existing.remove(); return; }
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'ap-cascade-dropdown';
+            dropdown.style.cssText = 'position:absolute; top:calc(100% + 4px); left:0; z-index:9999; background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.12); padding:4px; min-width:150px;';
+
+            available.forEach(p => {
+                const item = document.createElement('button');
+                item.style.cssText = 'display:flex; align-items:center; gap:8px; width:100%; padding:7px 10px; border:none; background:none; border-radius:6px; cursor:pointer; text-align:left; font-size:12px; color:#1e293b; transition:background 0.1s;';
+                item.onmouseenter = () => { item.style.background = '#f1f5f9'; };
+                item.onmouseleave = () => { item.style.background = 'none'; };
+                item.innerHTML = `<img src="${getProviderIconUrl(p.id)}" style="width:14px;height:14px;object-fit:contain;border-radius:2px;"> ${p.name}`;
+                item.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    dropdown.remove();
+                    handleCascadeSearch(field, p);
+                });
+                dropdown.appendChild(item);
+            });
+
+            container.appendChild(dropdown);
+
+            // Close on outside click
+            const onOutsideClick = (ev) => {
+                if (!container.contains(ev.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', onOutsideClick);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', onOutsideClick), 0);
+        });
+    };
+
+    /**
+     * Calls /api/enrich-field for the given provider + field.
+     * Updates the UI on success/failure and re-renders cascade buttons.
+     */
+    const handleCascadeSearch = async (field, provider) => {
+        if (!extractedLeadData) return;
+
+        const containerId = field === 'email' ? 'apCascadeEmail' : 'apCascadePhone';
+        const container = document.getElementById(containerId);
+        const valueEl = document.getElementById(field === 'email' ? 'apDataEmail' : 'apDataPhone');
+
+        // Show loading in container
+        if (container) {
+            container.innerHTML = `<span style="font-size:10px; color:#94a3b8; display:flex; align-items:center; gap:4px;"><span class="ap-loader" style="display:inline-block; border-color:#94a3b8 transparent transparent transparent; width:10px; height:10px;"></span> Buscando con ${provider.name}...</span>`;
+        }
+
+        // Mark as tried
+        triedProviders[field].add(provider.id);
+
+        try {
+            const body = {
+                linkedinUrl: currentLinkedinUrl,
+                field,
+                provider: provider.id,
+                sesion_id: currentSesionId,
+                metadata: {
+                    firstName: extractedLeadData.firstName,
+                    lastName: extractedLeadData.lastName,
+                    companyDomain: extractedLeadData.companyDomain,
+                    companyName: extractedLeadData.company
+                }
+            };
+
+            const res = await fetch(`${apiUrl}/api/enrich-field`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': tenantApiKey, 'x-google-id': userId },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+
+            if (data.found && data.value) {
+                // Update in-memory lead data
+                if (field === 'email') {
+                    extractedLeadData.email = data.value;
+                    extractedLeadData.primaryEmail = data.value;
+                    if (valueEl) valueEl.textContent = data.value;
+                    // Show validate button now that we have an email
+                    const validateBtn = document.getElementById('apValidateEmailBtn');
+                    if (validateBtn) {
+                        validateBtn.style.display = 'flex';
+                        validateBtn.disabled = false;
+                        validateBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
+                    }
+                } else {
+                    extractedLeadData.phoneNumber = data.value;
+                    if (valueEl) valueEl.textContent = data.value;
+                    // Hide the Apollo "Solicitar" button
+                    const phoneBtn = document.getElementById('apRequestPhoneBtn');
+                    if (phoneBtn) phoneBtn.style.display = 'none';
+                }
+                // Add found badge in container
+                if (container) {
+                    const iconUrl = getProviderIconUrl(provider.id);
+                    container.innerHTML = `<span style="display:flex; align-items:center; gap:4px; font-size:10px; color:#16a34a; background:#dcfce7; border-radius:20px; padding:2px 7px; width:fit-content;"><img src="${iconUrl}" style="width:11px;height:11px;object-fit:contain;"> ${provider.name} ✓</span>`;
+                }
+            } else {
+                // Not found — re-render with remaining providers
+                if (container) {
+                    container.innerHTML = '';
+                    const notFoundLabel = document.createElement('span');
+                    notFoundLabel.style.cssText = 'font-size:10px; color:#94a3b8;';
+                    notFoundLabel.textContent = `${provider.name}: no encontrado`;
+                    container.appendChild(notFoundLabel);
+                }
+                // Re-render with remaining providers after brief feedback
+                setTimeout(() => renderCascadeButtons(field), 1200);
+            }
+        } catch (err) {
+            if (container) {
+                container.innerHTML = '';
+                renderCascadeButtons(field);
+            }
+        }
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     const resetToExtractState = () => {
         extractSection.style.display = 'flex';
@@ -546,26 +740,32 @@ const initializeWidgetLogic = async () => {
             emailBadge.style.display = 'none';
         }
 
-        // Phone: show if returned, else offer "Solicitar" button (Apollo only)
+        // Cascade: email — show dropdown if no email found
+        if (!leadData.email && !leadData.primaryEmail) {
+            triedProviders.email.add(currentEnrichmentProvider);
+            renderCascadeButtons('email');
+        } else {
+            const cascadeEl = document.getElementById('apCascadeEmail');
+            if (cascadeEl) cascadeEl.style.display = 'none';
+        }
+
+        // Phone: show if returned, else offer "Solicitar" (Apollo) or cascade buttons
         const phoneEl = document.getElementById('apDataPhone');
         const phBadge = document.getElementById('apPhoneBadge');
         if (leadData.phoneNumber) {
             phoneEl.textContent = leadData.phoneNumber;
             if (requestPhoneBtn) requestPhoneBtn.style.display = 'none';
             if (phBadge) phBadge.style.display = 'none';
+            const cascadeEl = document.getElementById('apCascadePhone');
+            if (cascadeEl) cascadeEl.style.display = 'none';
         } else {
             phoneEl.textContent = '—';
             if (phBadge) phBadge.style.display = 'none';
-            // Only show "Solicitar" button for Apollo tenants (Prospeo is synchronous)
-            if (requestPhoneBtn) {
-                if (currentEnrichmentProvider === 'apollo') {
-                    requestPhoneBtn.style.display = 'flex';
-                    requestPhoneBtn.disabled = false;
-                    requestPhoneBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Solicitar';
-                } else {
-                    requestPhoneBtn.style.display = 'none';
-                }
-            }
+            // Hide old Apollo-only button — cascade replaces it
+            if (requestPhoneBtn) requestPhoneBtn.style.display = 'none';
+            // Show cascade dropdown for phone
+            triedProviders.phone.add(currentEnrichmentProvider);
+            renderCascadeButtons('phone');
         }
 
         // Initial setup for Validate and Save buttons based on if there is a primary email
@@ -660,9 +860,10 @@ const initializeWidgetLogic = async () => {
         if (currentLinkedinUrl !== window.location.href) {
             currentLinkedinUrl = window.location.href;
             currentSesionId = crypto.randomUUID(); // Nuevo perfil → nueva sesión
-            hasExtractedCurrentProfile = false; // Reset lock when URL changes
+            hasExtractedCurrentProfile = false;
+            triedProviders = { email: new Set(), phone: new Set() }; // Reset cascade on new profile
             updateUrlDisplay();
-            resetToExtractState(); // Al cambiar de página, volver al estado 1
+            resetToExtractState();
         }
     }, 1000);
 
@@ -763,6 +964,9 @@ const initializeWidgetLogic = async () => {
                 disconnectWrap.style.display = 'none';
 
                 if (currentLinkedinUrl.includes('linkedin.com/in/')) extractBtn.disabled = false;
+
+                // Load cascade providers (fire and forget)
+                loadTenantProviders();
 
             } else {
                 // NO autenticado

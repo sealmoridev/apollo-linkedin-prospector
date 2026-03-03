@@ -143,17 +143,21 @@ export default function Apis() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [empresaId]);
 
-    const saveApiKey = async (field: 'apollo_api_key' | 'millionverifier_api_key' | 'prospeo_api_key', value: string) => {
+    const saveApiKey = async (
+        field: 'apollo_api_key' | 'millionverifier_api_key' | 'prospeo_api_key' | 'findymail_api_key' | 'leadmagic_api_key',
+        value: string
+    ) => {
         if (!empresa) throw new Error('No hay empresa cargada');
         const updated = await updateEmpresa(empresa.id, { [field]: value });
         setEmpresa(prev => prev ? { ...prev, ...updated } : updated);
     };
 
-    const saveProvider = async (provider: 'apollo' | 'prospeo') => {
+    const saveProvider = async (provider: 'apollo' | 'prospeo' | 'findymail' | 'leadmagic') => {
         if (!empresa) throw new Error('No hay empresa cargada');
         const updated = await updateEmpresa(empresa.id, { enrichment_provider: provider });
         setEmpresa(prev => prev ? { ...prev, ...updated } : updated);
-        toast.success(`Proveedor cambiado a ${provider === 'apollo' ? 'Apollo.io' : 'Prospeo'}`);
+        const names: Record<string, string> = { apollo: 'Apollo.io', prospeo: 'Prospeo', findymail: 'Findymail', leadmagic: 'LeadMagic' };
+        toast.success(`Proveedor principal: ${names[provider]}`);
     };
 
     if (loading) {
@@ -168,19 +172,26 @@ export default function Apis() {
         return <div className="text-center py-12 text-muted-foreground">No hay empresa configurada.</div>;
     }
 
-    const currentProvider: 'apollo' | 'prospeo' = (empresa.enrichment_provider as 'apollo' | 'prospeo') || 'apollo';
+    const currentProvider = empresa.enrichment_provider || 'apollo';
+
+    const enrichmentProviders: { id: typeof currentProvider; logo: string; name: string; desc: string }[] = [
+        { id: 'apollo',    logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'Apollo.io',  desc: 'Email + Teléfono async webhook.' },
+        { id: 'prospeo',   logo: `${import.meta.env.BASE_URL}prospeoicon.png`,  name: 'Prospeo',    desc: 'Email + Teléfono sincrónico. $39/mes.' },
+        { id: 'findymail', logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'Findymail',  desc: 'Email por LinkedIn URL. $49/mes.' },
+        { id: 'leadmagic', logo: `${import.meta.env.BASE_URL}apolloicon.png`,   name: 'LeadMagic',  desc: 'Email + Teléfono. 300 req/min. $99/mes.' },
+    ];
 
     return (
         <div className="space-y-6 max-w-2xl">
             <div>
                 <h1 className="text-2xl font-bold">Integraciones API</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                    Claves de acceso para los servicios externos que usa la extensión Chrome.
-                    Cada API se guarda de forma independiente.
+                    Configura los proveedores de enriquecimiento. El proveedor principal se usa en la extracción inicial;
+                    los demás configurados estarán disponibles en la cascada.
                 </p>
             </div>
 
-            {/* ── Proveedor de Enriquecimiento ─────────────────────────────── */}
+            {/* ── Proveedor Principal ───────────────────────────────────────── */}
             <Card>
                 <CardHeader className="pb-4">
                     <div className="flex items-center gap-3">
@@ -188,66 +199,47 @@ export default function Apis() {
                             <Zap className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                            <CardTitle className="text-base">Proveedor de Enriquecimiento</CardTitle>
+                            <CardTitle className="text-base">Proveedor Principal</CardTitle>
                             <CardDescription className="mt-0.5 text-xs">
-                                Selecciona qué API usará la extensión para extraer datos de perfiles LinkedIn.
+                                Usado en la extracción inicial. Los demás aparecen en la cascada de búsqueda.
                             </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-2 gap-3">
-                        <button
-                            onClick={() => saveProvider('apollo')}
-                            className={`flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors ${
-                                currentProvider === 'apollo'
-                                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                    : 'border-border hover:border-muted-foreground/40'
-                            }`}
-                        >
-                            <div className="flex items-center justify-between w-full">
-                                <img src={`${import.meta.env.BASE_URL}Apollo-Logo.png`} alt="Apollo" className="h-6 object-contain" />
-                                {currentProvider === 'apollo' && (
-                                    <Badge variant="default" className="text-xs">Activo</Badge>
-                                )}
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium">Apollo.io</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    Teléfono vía webhook async. Requiere plan Organization.
-                                </p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => saveProvider('prospeo')}
-                            className={`flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors ${
-                                currentProvider === 'prospeo'
-                                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                    : 'border-border hover:border-muted-foreground/40'
-                            }`}
-                        >
-                            <div className="flex items-center justify-between w-full">
-                                <img src={`${import.meta.env.BASE_URL}prospeoicon.png`} alt="Prospeo" className="h-6 object-contain" />
-                                {currentProvider === 'prospeo' && (
-                                    <Badge variant="default" className="text-xs">Activo</Badge>
-                                )}
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium">Prospeo.io</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    Teléfono sincrónico en la misma respuesta. Desde $39/mes.
-                                </p>
-                            </div>
-                        </button>
+                        {enrichmentProviders.map(p => (
+                            <button
+                                key={p.id}
+                                onClick={() => saveProvider(p.id)}
+                                className={`flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
+                                    currentProvider === p.id
+                                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                        : 'border-border hover:border-muted-foreground/40'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between w-full">
+                                    <img src={p.logo} alt={p.name} className="h-5 object-contain" />
+                                    {currentProvider === p.id && (
+                                        <Badge variant="default" className="text-[10px] py-0">Principal</Badge>
+                                    )}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold">{p.name}</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">{p.desc}</p>
+                                </div>
+                            </button>
+                        ))}
                     </div>
                 </CardContent>
             </Card>
 
             {/* ── Claves de API ────────────────────────────────────────────── */}
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">Claves de acceso</p>
+
             <ApiKeyCard
                 title="Apollo.io"
-                description="Enriquecimiento de perfiles de LinkedIn — contactos, emails y datos laborales."
+                description="Email + teléfono async (webhook). Requiere plan Organization para teléfonos."
                 logoUrl={`${import.meta.env.BASE_URL}Apollo-Logo.png`}
                 initialValue={empresa.apollo_api_key ?? ''}
                 placeholder="sk_..."
@@ -256,8 +248,8 @@ export default function Apis() {
             />
 
             <ApiKeyCard
-                title="Prospeo.io"
-                description="Alternativa a Apollo con teléfono sincrónico. Desde plan Starter ($39/mes)."
+                title="Prospeo"
+                description="Email + teléfono sincrónico en la misma respuesta. Desde $39/mes."
                 logoUrl={`${import.meta.env.BASE_URL}prospeoicon.png`}
                 initialValue={empresa.prospeo_api_key ?? ''}
                 placeholder="••••••••••••••••"
@@ -266,8 +258,32 @@ export default function Apis() {
             />
 
             <ApiKeyCard
+                title="Findymail"
+                description="Email por LinkedIn URL directo. 1 crédito/email encontrado. $49/mes."
+                Icon={Zap}
+                iconClass="text-blue-400"
+                initialValue={empresa.findymail_api_key ?? ''}
+                placeholder="••••••••••••••••"
+                docsUrl="https://findymail.com"
+                onSave={(key) => saveApiKey('findymail_api_key', key)}
+            />
+
+            <ApiKeyCard
+                title="LeadMagic"
+                description="Email (nombre+dominio) + teléfono directo (5 créditos/teléfono). $99/mes."
+                Icon={Zap}
+                iconClass="text-purple-400"
+                initialValue={empresa.leadmagic_api_key ?? ''}
+                placeholder="••••••••••••••••"
+                docsUrl="https://leadmagic.io"
+                onSave={(key) => saveApiKey('leadmagic_api_key', key)}
+            />
+
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">Verificación</p>
+
+            <ApiKeyCard
                 title="MillionVerifier"
-                description="Verificación de validez de emails antes de guardarlos en el sheet."
+                description="Verifica si un email es válido antes de guardarlo en el sheet."
                 logoUrl={`${import.meta.env.BASE_URL}MillionVerifier-Logo.png`}
                 initialValue={empresa.millionverifier_api_key ?? ''}
                 placeholder="••••••••••••••••"

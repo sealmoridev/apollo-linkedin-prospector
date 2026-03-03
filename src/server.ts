@@ -8,6 +8,11 @@ import { SheetsService } from './services/sheets-service';
 import { tokenStorage } from './services/token-storage';
 import { validateLinkedInUrl } from './utils/linkedin-validator';
 import { millionVerifyService } from './services/million-verify-service';
+import { ApolloClient } from './services/apollo-client';
+import { ProspeoClient } from './services/prospeo-client';
+import { FindymailClient } from './services/findymail-client';
+import { LeadMagicClient } from './services/leadmagic-client';
+import { getConfiguredProviders } from './services/provider-registry';
 import adminRoutes from './routes/admin';
 import cors from 'cors';
 
@@ -346,6 +351,127 @@ app.post('/api/enrich-phone', tenantAuthMiddleware, async (req: Request, res: Re
     console.error('[API] Error requesting phone:', error);
     res.status(500).json({
       error: 'Error al solicitar teléfono',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================================
+// CASCADE ENRICHMENT
+// ============================================================================
+
+/** Returns configured providers for the tenant + which fields each supports */
+app.get('/api/tenant-providers', tenantAuthMiddleware, (req: Request, res: Response) => {
+  const tenant = req.tenant! as any;
+  const configured = getConfiguredProviders(tenant);
+  const active = tenant.enrichment_provider || 'apollo';
+
+  res.json({
+    active,
+    providers: configured.map(p => ({
+      id: p.id,
+      name: p.name,
+      fields: p.fields
+    }))
+  });
+});
+
+/**
+ * Search a specific field (email | phone) using a specific provider.
+ * Used for cascade enrichment — each field independently.
+ */
+app.post('/api/enrich-field', tenantAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { linkedinUrl, field, provider, metadata, sesion_id } = req.body;
+    const tenant = req.tenant! as any;
+    const user = req.extensionUser!;
+
+    if (!linkedinUrl || !field || !provider) {
+      return res.status(400).json({ error: 'linkedinUrl, field, and provider are required' });
+    }
+    if (!['email', 'phone'].includes(field)) {
+      return res.status(400).json({ error: 'field must be "email" or "phone"' });
+    }
+
+    const apiKeyMap: Record<string, string | null> = {
+      apollo:    tenant.apollo_api_key    || null,
+      prospeo:   tenant.prospeo_api_key   || null,
+      findymail: tenant.findymail_api_key || null,
+      leadmagic: tenant.leadmagic_api_key || null,
+    };
+    const apiKey = apiKeyMap[provider];
+    if (!apiKey) {
+      return res.status(403).json({ error: `${provider} API key not configured for this tenant` });
+    }
+
+    console.log(`[CascadeEnrich] field=${field} provider=${provider} url=${linkedinUrl} user=${user.id}`);
+
+    let found = false;
+    let value: string | null = null;
+    let creditsConsumed = 0;
+
+    if (provider === 'apollo') {
+      const client = new ApolloClient(apiKey, webhookServer);
+      const lead = await client.enrichProfile(linkedinUrl, {
+        revealPersonalEmails: field === 'email',
+        revealPhoneNumber: field === 'phone'
+      });
+      value = field === 'email' ? (lead.email || lead.personalEmail || null) : (lead.phoneNumber || null);
+      found = !!value;
+      creditsConsumed = lead.creditsConsumed || 1;
+
+    } else if (provider === 'prospeo') {
+      const client = new ProspeoClient(apiKey);
+      const lead = await client.enrichProfile(linkedinUrl);
+      value = field === 'email' ? (lead.email || null) : (lead.phoneNumber || null);
+      found = !!value;
+      creditsConsumed = lead.creditsConsumed || 1;
+
+    } else if (provider === 'findymail') {
+      const client = new FindymailClient(apiKey);
+      const result = field === 'email'
+        ? await client.findEmail(linkedinUrl)
+        : await client.findPhone(linkedinUrl);
+      ({ found, value, creditsConsumed } = result);
+
+    } else if (provider === 'leadmagic') {
+      const client = new LeadMagicClient(apiKey);
+      if (field === 'email') {
+        const result = await client.findEmail(
+          metadata?.firstName || '',
+          metadata?.lastName || '',
+          metadata?.companyDomain || null,
+          metadata?.companyName || null
+        );
+        ({ found, value, creditsConsumed } = result);
+      } else {
+        const result = await client.findPhone(linkedinUrl);
+        ({ found, value, creditsConsumed } = result);
+      }
+
+    } else {
+      return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    }
+
+    // Log credit usage (even if not found — some providers charge on attempt)
+    if (creditsConsumed > 0) {
+      await prisma.consumo.create({
+        data: {
+          usuario_id: user.id,
+          empresa_id: tenant.id,
+          creditos_apollo: creditsConsumed,
+          creditos_verifier: 0,
+          sesion_id: sesion_id || null
+        }
+      });
+    }
+
+    res.json({ success: true, found, field, value, provider, creditsConsumed });
+
+  } catch (error) {
+    console.error('[CascadeEnrich] Error:', error);
+    res.status(500).json({
+      error: 'Cascade enrichment failed',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

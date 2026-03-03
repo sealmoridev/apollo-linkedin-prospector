@@ -13,6 +13,8 @@ model Empresa {
   apollo_api_key          String?
   millionverifier_api_key String?
   prospeo_api_key         String?
+  findymail_api_key       String?
+  leadmagic_api_key       String?
   enrichment_provider     String          @default("apollo")
   logo_url                String?
   key_active              Boolean         @default(true)
