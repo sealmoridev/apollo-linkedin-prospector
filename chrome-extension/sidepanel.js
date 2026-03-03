@@ -773,6 +773,9 @@ const getProviderIconUrl = (providerId) => {
         extractLoader.style.display = 'inline-block';
         clearMessage();
 
+        // Refresh provider config before every extraction so backoffice changes apply immediately
+        await loadTenantProviders();
+
         try {
             const response = await fetch(`${apiUrl}/api/enrich`, {
                 method: 'POST',
