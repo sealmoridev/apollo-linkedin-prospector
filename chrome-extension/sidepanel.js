@@ -20,6 +20,7 @@ let isAuthenticated = false;
 let extractedLeadData = null;
 let hasExtractedCurrentProfile = false;
 let currentEnrichmentProvider = 'apollo';
+let primaryPhoneEnabled = false; // true only when primary provider fetches phone (e.g. Prospeo with toggle on)
 let configuredProviders = [];
 let triedProviders = { email: new Set(), phone: new Set() };
 let cascadeResults = { email: [], phone: [] };
@@ -176,6 +177,7 @@ const getProviderIconUrl = (providerId) => {
             const data = await res.json();
             configuredProviders = data.providers || [];
             currentEnrichmentProvider = data.active || 'apollo';
+            primaryPhoneEnabled = data.primaryPhoneEnabled === true;
         } catch (e) {
             console.warn('[MRP] Could not load tenant providers:', e);
         }
@@ -551,10 +553,13 @@ const getProviderIconUrl = (providerId) => {
             phoneEl.textContent = '—';
             if (phBadge) phBadge.style.display = 'none';
             if (requestPhoneBtn) requestPhoneBtn.style.display = 'none';
-            triedProviders.phone.add(currentEnrichmentProvider);
-            // Only show ✗ badge if the provider actually attempted phone (Prospeo always does)
+            // Only mark as tried / show ✗ badge if the primary provider actually requested phone.
+            // e.g. Prospeo with primaryPhone=true tried and failed → block it from cascade.
+            // e.g. Prospeo with primaryPhone=false never tried → leave it available in cascade.
             const providerAlwaysTriesPhone = ['prospeo'];
-            if (providerAlwaysTriesPhone.includes(currentEnrichmentProvider)) {
+            const primaryTriedPhone = primaryPhoneEnabled && providerAlwaysTriesPhone.includes(currentEnrichmentProvider);
+            if (primaryTriedPhone) {
+                triedProviders.phone.add(currentEnrichmentProvider);
                 cascadeResults.phone.push({
                     providerId: currentEnrichmentProvider,
                     name: providerNames[currentEnrichmentProvider] || currentEnrichmentProvider,

@@ -377,8 +377,15 @@ app.get('/api/tenant-providers', tenantAuthMiddleware, (req: Request, res: Respo
   const configured = getConfiguredProviders(tenant);
   const active = tenant.enrichment_provider || 'apollo';
 
+  // Whether the primary provider actually requests phone in its initial call
+  const tenantProviderConfig = (tenant.provider_config as Record<string, any> | null) ?? {};
+  const primaryPhoneEnabled = active === 'prospeo'
+    ? (tenantProviderConfig?.prospeo?.primaryPhone !== false)
+    : false; // Apollo/others never fetch phone in the primary call
+
   res.json({
     active,
+    primaryPhoneEnabled,
     providers: configured.map(p => ({
       id: p.id,
       name: p.name,
