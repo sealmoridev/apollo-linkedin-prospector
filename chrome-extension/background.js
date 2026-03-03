@@ -14,5 +14,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         chrome.runtime.openOptionsPage();
         sendResponse({ ok: true });
     }
+    if (request.action === 'openSidePanel' && sender.tab?.id) {
+        chrome.sidePanel.open({ tabId: sender.tab.id }).catch(console.error);
+        sendResponse({ ok: true });
+    }
     return true;
 });

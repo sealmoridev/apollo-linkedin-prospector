@@ -96,9 +96,9 @@ const getProviderIconUrl = (providerId) => {
     const obOptionsLink     = document.getElementById('apObOptionsLink');
 
     // ── Settings button handlers ─────────────────────────────────────────────
-    pcSettingsBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
-    document.getElementById('apPcHintOptionsBtn').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
-    optionsLink.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
+    pcSettingsBtn.addEventListener('click', () => window.location.href = 'options.html');
+    document.getElementById('apPcHintOptionsBtn').addEventListener('click', () => window.location.href = 'options.html');
+    optionsLink.addEventListener('click', () => window.location.href = 'options.html');
 
     // ── Onboarding ───────────────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ const getProviderIconUrl = (providerId) => {
             : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
     });
 
-    obOptionsLink.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptionsPage' }));
+    obOptionsLink.addEventListener('click', () => window.location.href = 'options.html');
 
     onboardingBtn.addEventListener('click', async () => {
         const key = onboardingInput.value.trim();

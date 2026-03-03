@@ -13,6 +13,25 @@
             color: #0f172a;
         }
 
+        .back-to-panel {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #7c3aed;
+            text-decoration: none;
+            width: fit-content;
+            border-radius: 8px;
+            margin: 12px 0 0 0;
+            transition: background 0.15s;
+        }
+
+        .back-to-panel:hover {
+            background: rgba(124, 58, 237, 0.08);
+        }
+
         .container {
             max-width: 600px;
             margin: 60px auto;
@@ -413,6 +432,11 @@
 </head>
 
 <body>
+
+    <a href="sidepanel.html" class="back-to-panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        Volver al Panel
+    </a>
 
     <div class="container">
         <div class="header">

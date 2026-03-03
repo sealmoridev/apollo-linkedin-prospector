@@ -22,6 +22,9 @@
             "matches": [
                 "https://*.linkedin.com/*"
             ],
+            "css": [
+                "content.css"
+            ],
             "js": [
                 "content.js"
             ],
