@@ -1,18 +1,18 @@
+// Open the side panel when the extension icon is clicked
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+
+// Forward tab-switch events to the side panel so it updates its URL state
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    try {
+        const tab = await chrome.tabs.get(activeInfo.tabId);
+        chrome.runtime.sendMessage({ type: 'TAB_ACTIVATED', url: tab.url || '' }).catch(() => {});
+    } catch (_) {}
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "openOptionsPage") {
+    if (request.action === 'openOptionsPage') {
         chrome.runtime.openOptionsPage();
         sendResponse({ ok: true });
     }
-    return true; // keep message channel open
-});
-
-// Opcional: Permitir que al hacer click en el icono de la extensión se fije/muestre el panel
-chrome.action.onClicked.addListener((tab) => {
-    if (tab.url && tab.url.includes("linkedin.com/in/")) {
-        // Enviar un mensaje al content script para abrir o cerrar el panel
-        chrome.tabs.sendMessage(tab.id, { action: "togglePanel" });
-    } else {
-        // Si no está en LinkedIn, abrir las opciones o una pestaña de LinkedIn
-        chrome.runtime.openOptionsPage();
-    }
+    return true;
 });

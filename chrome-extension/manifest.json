@@ -1,26 +1,26 @@
 {
     "manifest_version": 3,
     "name": "MR Prospect",
-    "version": "1.1.0",
-    "description": "Extrae datos de perfiles de LinkedIn y los guarda en Google Sheets mediante un widget lateral interactivo.",
+    "version": "1.2.0",
+    "description": "Extrae datos de perfiles de LinkedIn y los guarda en Google Sheets mediante un panel lateral.",
     "background": {
         "service_worker": "background.js"
     },
     "action": {
-        "default_title": "Abrir Prospector",
+        "default_title": "Abrir MR Prospect",
         "default_icon": {
             "16": "assets/icon16.png",
             "48": "assets/icon48.png",
             "128": "assets/icon128.png"
         }
     },
+    "side_panel": {
+        "default_path": "sidepanel.html"
+    },
     "content_scripts": [
         {
             "matches": [
                 "https://*.linkedin.com/*"
-            ],
-            "css": [
-                "content.css"
             ],
             "js": [
                 "content.js"
@@ -37,20 +37,12 @@
         "48": "assets/icon48.png",
         "128": "assets/icon128.png"
     },
-    "web_accessible_resources": [
-        {
-            "resources": [
-                "assets/*.png"
-            ],
-            "matches": [
-                "https://*.linkedin.com/*"
-            ]
-        }
-    ],
     "permissions": [
         "activeTab",
         "scripting",
-        "storage"
+        "storage",
+        "sidePanel",
+        "tabs"
     ],
     "host_permissions": [
         "https://*.linkedin.com/*",
