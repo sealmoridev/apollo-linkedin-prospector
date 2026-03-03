@@ -39,13 +39,13 @@ export class ProspeoClient {
         data: { linkedin_url: linkedinUrl }
       });
 
-      return this.parseProspeoResponse(response.data, linkedinUrl);
+      return this.parseProspeoResponse(response.data, linkedinUrl, includePhone);
     } catch (error) {
       throw this.handleProspeoError(error, linkedinUrl);
     }
   }
 
-  private parseProspeoResponse(response: any, linkedinUrl: string): EnrichedLead {
+  private parseProspeoResponse(response: any, linkedinUrl: string, includePhone: boolean = true): EnrichedLead {
     const person = response?.person;
 
     if (!person) {
@@ -72,10 +72,12 @@ export class ProspeoClient {
       ? person.email?.email || null
       : person.email || null;
 
-    // Teléfono: puede venir como objeto { mobile } o string
-    const phoneNumber = typeof person.mobile === 'object'
-      ? person.mobile?.mobile || null
-      : person.mobile || null;
+    // Teléfono: respetamos el flag includePhone incluso si Prospeo devuelve el dato en su respuesta
+    const phoneNumber = includePhone
+      ? (typeof person.mobile === 'object'
+          ? person.mobile?.mobile || null
+          : person.mobile || null)
+      : null;
 
     // Company domain
     const companyDomain = company?.domain || company?.website || null;

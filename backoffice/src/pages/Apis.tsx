@@ -280,7 +280,9 @@ export default function Apis() {
             id: 'prospeo',
             logo: `${import.meta.env.BASE_URL}prospeoicon.png`,
             name: 'Prospeo',
-            primaryCapability: 'Email + Teléfono (una sola llamada)',
+            primaryCapability: getCapability('prospeo', 'primaryPhone')
+                ? 'Email + Teléfono (una sola llamada)'
+                : 'Solo Email (teléfono desactivado)',
         },
         {
             id: 'findymail',
