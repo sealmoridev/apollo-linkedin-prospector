@@ -335,7 +335,15 @@ export default function Apis() {
                 placeholder="sk_..."
                 docsUrl="https://app.apollo.io"
                 onSave={(key) => saveApiKey('apollo_api_key', key)}
-            />
+            >
+                <CapabilityToggles
+                    providerId="apollo"
+                    hasKey={!!empresa.apollo_api_key}
+                    emailEnabled={getCapability('apollo', 'email')}
+                    phoneEnabled={getCapability('apollo', 'phone')}
+                    onToggle={(field, val) => toggleCapability('apollo', field, val)}
+                />
+            </ApiKeyCard>
 
             <ApiKeyCard
                 title="Prospeo"
