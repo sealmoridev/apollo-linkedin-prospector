@@ -191,7 +191,7 @@ export default function Apis() {
 
     const [empresa, setEmpresa] = useState<EmpresaDetail | null>(null);
     const [loading, setLoading] = useState(true);
-    const [providerConfig, setProviderConfig] = useState<Record<string, { email: boolean; phone: boolean }>>({});
+    const [providerConfig, setProviderConfig] = useState<Record<string, { email: boolean; phone: boolean; primaryPhone?: boolean }>>({});
 
     // Cleanup on unmount (SA only)
     useEffect(() => {
