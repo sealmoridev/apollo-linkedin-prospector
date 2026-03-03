@@ -229,7 +229,7 @@ export default function Apis() {
         toast.success(`Proveedor principal: ${names[provider]}`);
     };
 
-    const toggleCapability = async (providerId: string, field: 'email' | 'phone', val: boolean) => {
+    const toggleCapability = async (providerId: string, field: 'email' | 'phone' | 'primaryPhone', val: boolean) => {
         if (!empresa) return;
         const current = providerConfig[providerId] ?? { email: true, phone: true };
         const updated = { ...current, [field]: val };
@@ -238,13 +238,12 @@ export default function Apis() {
         try {
             await updateEmpresa(empresa.id, { provider_config: newConfig });
         } catch (err: any) {
-            // Revert on failure
             setProviderConfig(providerConfig);
             toast.error(err.message || 'Error al guardar configuración');
         }
     };
 
-    const getCapability = (providerId: string, field: 'email' | 'phone') => {
+    const getCapability = (providerId: string, field: 'email' | 'phone' | 'primaryPhone') => {
         const cfg = providerConfig[providerId];
         if (!cfg) return true; // default: enabled
         return cfg[field] !== false;
@@ -287,7 +286,8 @@ export default function Apis() {
             id: 'findymail',
             logo: `${import.meta.env.BASE_URL}findymail-logo.png`,
             name: 'Findymail',
-            primaryCapability: 'Solo Email · Tel. por cascada',
+            primaryCapability: 'Solo disponible como cascada',
+            cascadeOnly: true,
         },
         {
             id: 'leadmagic',
@@ -388,6 +388,17 @@ export default function Apis() {
                 docsUrl="https://prospeo.io"
                 onSave={(key) => saveApiKey('prospeo_api_key', key)}
             >
+                <div className="mt-4 pt-3 border-t border-border">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        Como proveedor principal:
+                    </p>
+                    <Toggle
+                        checked={getCapability('prospeo', 'primaryPhone')}
+                        disabled={!empresa.prospeo_api_key}
+                        onChange={val => toggleCapability('prospeo', 'primaryPhone', val)}
+                        label="Incluir teléfono en extracción inicial"
+                    />
+                </div>
                 <CapabilityToggles
                     providerId="prospeo"
                     hasKey={!!empresa.prospeo_api_key}

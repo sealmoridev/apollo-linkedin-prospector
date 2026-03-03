@@ -138,10 +138,12 @@ app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response
 
     const provider = ((tenant as any).enrichment_provider || 'apollo') as string;
 
-    // LeadMagic cannot work as a standalone primary (email requires metadata from a prior extraction)
-    if (provider === 'leadmagic') {
+    // LeadMagic and Findymail cannot work as standalone primaries:
+    // - LeadMagic email requires firstName+lastName+domain from a prior extraction
+    // - Findymail only finds emails; returns no profile data (name, title, company, etc.)
+    if (provider === 'leadmagic' || provider === 'findymail') {
       return res.status(400).json({
-        error: 'LeadMagic no puede usarse como proveedor principal. Configura otro proveedor principal y usa LeadMagic como cascada.',
+        error: `${provider === 'leadmagic' ? 'LeadMagic' : 'Findymail'} no puede usarse como proveedor principal. Úsalo como cascada.`,
       });
     }
 
@@ -172,12 +174,18 @@ app.post('/api/enrich', tenantAuthMiddleware, async (req: Request, res: Response
 
     console.log(`[API] Enriching (${provider}): ${linkedinUrl} by user ${user.id}`);
 
-    // Prospeo always fetches phone synchronously; Apollo/Findymail: email only
+    // Prospeo: include phone only if primaryPhone setting is not explicitly false (default: true)
+    // Apollo/Findymail: email only
+    const tenantProviderConfig = (tenant as any).provider_config as Record<string, any> | null;
+    const prospeoIncludePhone = provider === 'prospeo'
+      ? (tenantProviderConfig?.prospeo?.primaryPhone !== false)
+      : false;
+
     const lead = await enrichmentService.enrichProfile(
       providerConfig,
       linkedinUrl,
       user.id,
-      provider === 'prospeo' ? true : false
+      prospeoIncludePhone
     );
 
     // Guardar registro de consumo

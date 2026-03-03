@@ -28,13 +28,13 @@ export class ProspeoClient {
    * Enriquece un perfil de LinkedIn usando Prospeo API (sincrónico).
    * El teléfono se devuelve en la misma respuesta HTTP.
    */
-  async enrichProfile(linkedinUrl: string): Promise<EnrichedLead> {
+  async enrichProfile(linkedinUrl: string, includePhone: boolean = true): Promise<EnrichedLead> {
     try {
-      console.log(`[Prospeo] Enriching profile: ${linkedinUrl}`);
+      console.log(`[Prospeo] Enriching profile: ${linkedinUrl} (phone: ${includePhone})`);
 
       const response = await this.client.post('/enrich-person', {
         enrich_email: true,
-        enrich_mobile: true,
+        enrich_mobile: includePhone,
         only_verified_mobile: false,
         data: { linkedin_url: linkedinUrl }
       });

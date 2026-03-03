@@ -17,7 +17,7 @@ export interface EmpresaDetail {
     enrichment_provider: 'apollo' | 'prospeo' | 'findymail' | 'leadmagic';
     logo_url: string | null;
     key_active: boolean;
-    provider_config: Record<string, { email: boolean; phone: boolean }> | null;
+    provider_config: Record<string, { email: boolean; phone: boolean; primaryPhone?: boolean }> | null;
     createdAt: string;
     updatedAt: string;
     _count: { extensionUsers: number; consumos: number };
@@ -166,7 +166,7 @@ export const getEmpresa = async (id: string): Promise<EmpresaDetail> => {
 
 export const updateEmpresa = async (
     id: string,
-    data: { nombre?: string; apollo_api_key?: string; millionverifier_api_key?: string; prospeo_api_key?: string; findymail_api_key?: string; leadmagic_api_key?: string; enrichment_provider?: 'apollo' | 'prospeo' | 'findymail' | 'leadmagic'; logo_url?: string; provider_config?: Record<string, { email: boolean; phone: boolean }> }
+    data: { nombre?: string; apollo_api_key?: string; millionverifier_api_key?: string; prospeo_api_key?: string; findymail_api_key?: string; leadmagic_api_key?: string; enrichment_provider?: 'apollo' | 'prospeo' | 'findymail' | 'leadmagic'; logo_url?: string; provider_config?: Record<string, { email: boolean; phone: boolean; primaryPhone?: boolean }> }
 ): Promise<EmpresaDetail> => {
     const res = await fetch(`${API_URL}/admin/empresas/${id}`, {
         method: 'PUT',

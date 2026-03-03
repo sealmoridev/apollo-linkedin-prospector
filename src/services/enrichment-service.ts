@@ -50,8 +50,7 @@ export class EnrichmentService {
 
       if (config.provider === 'prospeo') {
         const prospeoClient = new ProspeoClient(config.apiKey);
-        // Prospeo always returns email + phone in one sync call
-        enrichedLead = await prospeoClient.enrichProfile(normalizedUrl);
+        enrichedLead = await prospeoClient.enrichProfile(normalizedUrl, includePhone);
       } else if (config.provider === 'findymail') {
         const findymailClient = new FindymailClient(config.apiKey);
         // Findymail returns email only as primary (phone = cascade, 10 credits)
