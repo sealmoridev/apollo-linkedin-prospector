@@ -164,22 +164,35 @@ export default function MiEmpresa() {
 
     // ─ Derived data ──────────────────────────────────────────────────────────
 
-    // sesion_ids que ya tienen una captura con credit_breakdown (nuevo sistema).
-    // Los registros "sueltos" (enrich / verify) del mismo sesion_id no deben
-    // volver a contarse para evitar doble-conteo de créditos.
-    const capturedSesionIds = useMemo(() =>
-        new Set(consumos.filter(c => c.credit_breakdown != null && c.sesion_id != null).map(c => c.sesion_id!)),
-        [consumos]);
+    // Map: sesion_id → { email, verif } from captures with credit_breakdown.
+    // A solo consumo (enrich/verify) sharing a sesion_id is only skipped if the
+    // corresponding credit is already > 0 in the capture's breakdown, preventing
+    // double-counting while still surfacing credits when the old extension sent
+    // verifierCalled=false (verification_credits=0 in bd, but creditos_verifier=1 in solo record).
+    const sesionBreakdownMap = useMemo(() => {
+        const map = new Map<string, { email: number; verif: number }>();
+        consumos.forEach(c => {
+            if (c.credit_breakdown != null && c.sesion_id != null) {
+                map.set(c.sesion_id, {
+                    email: c.credit_breakdown.email_credits,
+                    verif: c.credit_breakdown.verification_credits,
+                });
+            }
+        });
+        return map;
+    }, [consumos]);
 
     // Extracciones = solo capturas (lead guardado), no registros intermedios
     const totalExtracciones = useMemo(() => consumos.filter(c => c.lead_data != null).length, [consumos]);
 
     const totalMailCredits = useMemo(() => consumos.reduce((s, c) => {
         if (c.credit_breakdown != null) return s + c.credit_breakdown.email_credits;
-        // Registro sin credit_breakdown: solo contar si NO pertenece a un sesion ya capturado
-        if (c.sesion_id && capturedSesionIds.has(c.sesion_id)) return s;
+        if (c.sesion_id) {
+            const bd = sesionBreakdownMap.get(c.sesion_id);
+            if (bd && bd.email > 0) return s; // already covered in capture breakdown
+        }
         return s + c.creditos_apollo;
-    }, 0), [consumos, capturedSesionIds]);
+    }, 0), [consumos, sesionBreakdownMap]);
 
     const totalPhoneCredits = useMemo(() => consumos.reduce((s, c) => {
         if (c.credit_breakdown != null) return s + c.credit_breakdown.phone_credits;
@@ -188,9 +201,12 @@ export default function MiEmpresa() {
 
     const totalVerifCredits = useMemo(() => consumos.reduce((s, c) => {
         if (c.credit_breakdown != null) return s + c.credit_breakdown.verification_credits;
-        if (c.sesion_id && capturedSesionIds.has(c.sesion_id)) return s;
+        if (c.sesion_id) {
+            const bd = sesionBreakdownMap.get(c.sesion_id);
+            if (bd && bd.verif > 0) return s; // already covered in capture breakdown
+        }
         return s + c.creditos_verifier;
-    }, 0), [consumos, capturedSesionIds]);
+    }, 0), [consumos, sesionBreakdownMap]);
 
     const sdrsActivos = useMemo(() => new Set(consumos.filter(c => c.lead_data != null).map(c => c.usuario?.email ?? c.usuario_id)).size, [consumos]);
 
@@ -204,8 +220,9 @@ export default function MiEmpresa() {
             // Créditos: misma lógica anti-doble-conteo
             if (c.credit_breakdown != null) {
                 prev.apollo += c.credit_breakdown.email_credits + c.credit_breakdown.phone_credits;
-            } else if (!c.sesion_id || !capturedSesionIds.has(c.sesion_id)) {
-                prev.apollo += c.creditos_apollo;
+            } else {
+                const bd = c.sesion_id ? sesionBreakdownMap.get(c.sesion_id) : undefined;
+                if (!bd || bd.email === 0) prev.apollo += c.creditos_apollo;
             }
             byDate.set(date, prev);
         });
@@ -214,7 +231,7 @@ export default function MiEmpresa() {
             extracciones: byDate.get(date)?.extracciones ?? 0,
             apollo: byDate.get(date)?.apollo ?? 0
         }));
-    }, [consumos, appliedRange, capturedSesionIds]);
+    }, [consumos, appliedRange, sesionBreakdownMap]);
 
     // Ranking SDR: agrupa por email para unificar IDs distintos del mismo SDR
     const sdrRanking = useMemo(() => {
@@ -232,9 +249,10 @@ export default function MiEmpresa() {
                 prev.mail += c.credit_breakdown.email_credits;
                 prev.phone += c.credit_breakdown.phone_credits;
                 prev.verif += c.credit_breakdown.verification_credits;
-            } else if (!c.sesion_id || !capturedSesionIds.has(c.sesion_id)) {
-                prev.mail += c.creditos_apollo;
-                prev.verif += c.creditos_verifier;
+            } else {
+                const bd = c.sesion_id ? sesionBreakdownMap.get(c.sesion_id) : undefined;
+                if (!bd || bd.email === 0) prev.mail += c.creditos_apollo;
+                if (!bd || bd.verif === 0) prev.verif += c.creditos_verifier;
             }
             byEmail.set(email, prev);
         });
@@ -245,7 +263,7 @@ export default function MiEmpresa() {
         return Array.from(byEmail.values())
             .sort((a, b) => b.extracciones - a.extracciones)
             .map(r => ({ ...r, sdr: emailToUser.get(r.email) }));
-    }, [consumos, usuarios]);
+    }, [consumos, usuarios, sesionBreakdownMap]);
 
     const registrosRoute = empresaId ? `/empresas/${empresaId}/historial` : '/historial';
 

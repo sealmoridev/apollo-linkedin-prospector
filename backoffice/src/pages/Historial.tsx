@@ -497,7 +497,11 @@ export default function Historial() {
                                                     const bd = c.credit_breakdown;
                                                     let v: number;
                                                     if (bd != null) {
-                                                        v = bd.verification_credits; // nuevo sistema
+                                                        // If old extension sent verifierCalled=false → verification_credits=0,
+                                                        // fall back to sesion_verifier which reflects the actual verify consumo
+                                                        v = bd.verification_credits > 0
+                                                            ? bd.verification_credits
+                                                            : (isCapture ? (c.sesion_verifier ?? 0) : 0);
                                                     } else if (isCapture) {
                                                         v = c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier; // captura antigua
                                                     } else {
@@ -680,7 +684,9 @@ export default function Historial() {
                                                         </div>
                                                         <div className="rounded-lg border bg-muted/30 p-2 text-center">
                                                             <p className="text-[10px] text-muted-foreground">Verif.</p>
-                                                            <p className="text-base font-bold">{bd.verification_credits}</p>
+                                                            <p className="text-base font-bold">
+                                                                {bd.verification_credits > 0 ? bd.verification_credits : (consumo.sesion_verifier ?? 0)}
+                                                            </p>
                                                         </div>
                                                     </div>
                                                     {Object.keys(bd.providers).length > 0 && (
