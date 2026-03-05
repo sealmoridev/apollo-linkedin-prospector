@@ -199,6 +199,112 @@ const getProviderIconUrl = (providerId) => {
         document.getElementById('apConfirmYes').addEventListener('click', () => cleanup(true));
     });
 
+    // ── Preview state persistence ────────────────────────────────────────────
+    // Survives tab switches within the same Chrome session (storage.session is
+    // cleared automatically when the browser closes, so no stale data).
+
+    const _PREVIEW_KEY = 'mrp_preview';
+
+    const savePreviewState = () => {
+        if (!extractedLeadData) return;
+        chrome.storage.session.set({
+            [_PREVIEW_KEY]: {
+                url:                   currentLinkedinUrl,
+                sesionId:              currentSesionId,
+                provider:              currentEnrichmentProvider,
+                primaryPhoneEnabled,
+                verifierCalled,
+                extractedLeadData,
+                cascadeResults: {
+                    email: cascadeResults.email,
+                    phone: cascadeResults.phone,
+                },
+                triedProviders: {
+                    email: [...triedProviders.email],
+                    phone: [...triedProviders.phone],
+                },
+            }
+        }).catch(() => {});
+    };
+
+    const clearPreviewState = () => {
+        chrome.storage.session.remove(_PREVIEW_KEY).catch(() => {});
+    };
+
+    const tryRestorePreviewState = async (url) => {
+        if (extractedLeadData) return false; // already in-progress, skip
+        try {
+            const result = await chrome.storage.session.get(_PREVIEW_KEY);
+            const s = result[_PREVIEW_KEY];
+            if (!s || s.url !== url) return false;
+
+            // Restore module-level vars before calling showPreviewState
+            currentSesionId          = s.sesionId;
+            currentEnrichmentProvider = s.provider;
+            primaryPhoneEnabled      = s.primaryPhoneEnabled;
+            verifierCalled           = s.verifierCalled;
+            hasExtractedCurrentProfile = false;
+
+            // Rebuild base UI (sets extractedLeadData, shows previewSection)
+            showPreviewState(s.extractedLeadData);
+
+            // Override cascade state with persisted values
+            // (showPreviewState may have set its own initial values — we win)
+            cascadeResults = {
+                email: s.cascadeResults.email || [],
+                phone: s.cascadeResults.phone || [],
+            };
+            triedProviders = {
+                email: new Set(s.triedProviders.email || []),
+                phone: new Set(s.triedProviders.phone || []),
+            };
+
+            // Re-render email cascade
+            const cEmail = document.getElementById('apCascadeEmail');
+            if (cEmail) {
+                cEmail.innerHTML = '';
+                renderCascadeBadges('email');
+                renderCascadeButtons('email');
+                if (cascadeResults.email.length > 0 || triedProviders.email.size > 0) {
+                    cEmail.style.display = 'block';
+                }
+            }
+
+            // Re-render phone cascade
+            const cPhone = document.getElementById('apCascadePhone');
+            if (cPhone) {
+                cPhone.innerHTML = '';
+                renderCascadeBadges('phone');
+                renderCascadeButtons('phone');
+                if (cascadeResults.phone.length > 0 || triedProviders.phone.size > 0) {
+                    cPhone.style.display = 'block';
+                }
+            }
+
+            // Restore email verification badge
+            const BADGE_MAP = {
+                valid:     ['ap-badge ap-badge-valid',    '<svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Válido'],
+                invalid:   ['ap-badge ap-badge-invalid',  '<svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Inválido'],
+                catch_all: ['ap-badge ap-badge-catchall', '<svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg> Catch-All'],
+            };
+            const emailStatus = s.extractedLeadData?.emailStatus;
+            if (emailStatus && BADGE_MAP[emailStatus]) {
+                const [cls, html] = BADGE_MAP[emailStatus];
+                if (validateEmailBtn) validateEmailBtn.style.display = 'none';
+                if (emailBadge) {
+                    emailBadge.style.display = 'inline-flex';
+                    emailBadge.className = cls;
+                    emailBadge.innerHTML = html;
+                }
+            }
+
+            return true;
+        } catch (e) {
+            console.warn('[MRP] Could not restore preview state:', e);
+            return false;
+        }
+    };
+
     // ── Cascade enrichment ───────────────────────────────────────────────────
 
     const loadTenantProviders = async () => {
@@ -361,6 +467,7 @@ const getProviderIconUrl = (providerId) => {
             const found = !!(data.found && data.value);
 
             cascadeResults[field].push({ providerId: provider.id, name: provider.name, found });
+            savePreviewState();
 
             if (found) {
                 if (field === 'email') {
@@ -659,11 +766,18 @@ const getProviderIconUrl = (providerId) => {
 
         if (newUrl !== currentLinkedinUrl) {
             currentLinkedinUrl = newUrl;
-            currentSesionId = crypto.randomUUID();
-            hasExtractedCurrentProfile = false;
-            triedProviders = { email: new Set(), phone: new Set() };
-            updateUrlDisplay();
-            resetToExtractState();
+            // Try to restore a previously saved extraction for this URL.
+            // Only if nothing is saved (or URL doesn't match) fall back to reset.
+            (async () => {
+                const restored = await tryRestorePreviewState(newUrl);
+                if (!restored) {
+                    currentSesionId = crypto.randomUUID();
+                    hasExtractedCurrentProfile = false;
+                    triedProviders = { email: new Set(), phone: new Set() };
+                    updateUrlDisplay();
+                    resetToExtractState();
+                }
+            })();
         }
     });
 
@@ -754,6 +868,9 @@ const getProviderIconUrl = (providerId) => {
 
                 loadTenantProviders();
 
+                // Restore any in-progress extraction for the currently visible profile
+                if (currentLinkedinUrl) tryRestorePreviewState(currentLinkedinUrl).catch(() => {});
+
             } else {
                 profileCard.style.display = 'none';
                 disconnectWrap.style.display = 'block';
@@ -839,6 +956,7 @@ const getProviderIconUrl = (providerId) => {
             if (data.success && data.data) {
                 currentEnrichmentProvider = data.provider || 'apollo';
                 showPreviewState(data.data);
+                savePreviewState();
             }
         } catch (error) {
             console.error('Extraction error:', error);
@@ -851,7 +969,10 @@ const getProviderIconUrl = (providerId) => {
     });
 
     // ── Cancel ───────────────────────────────────────────────────────────────
-    cancelBtn.addEventListener('click', resetToExtractState);
+    cancelBtn.addEventListener('click', () => {
+        clearPreviewState();
+        resetToExtractState();
+    });
 
     // ── Copy data ────────────────────────────────────────────────────────────
     const copyBtn = document.getElementById('apCopyDataBtn');
@@ -927,6 +1048,7 @@ const getProviderIconUrl = (providerId) => {
                 }
 
                 extractedLeadData.emailStatus = data.status;
+                savePreviewState();
             } catch (err) {
                 console.error('Validation error:', err);
                 validateEmailBtn.disabled = false;
@@ -1047,6 +1169,7 @@ const getProviderIconUrl = (providerId) => {
             if (!response.ok) throw new Error(data.error || 'Fallo al guardar en Sheets');
 
             if (data.success) {
+                clearPreviewState();
                 if (data.spreadsheetId && selectedSheetId === 'NEW_SHEET') {
                     await chrome.storage.sync.set({ defaultSheetId: data.spreadsheetId });
                     checkAuthStatus();
