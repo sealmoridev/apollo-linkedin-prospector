@@ -108,7 +108,6 @@ function ProviderCard({
                 <div className="mt-3 space-y-0">
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold mb-1">Uso registrado (nuestra DB)</p>
                     <StatRow label="Créditos este mes" value={d.db?.thisMonth ?? 0} />
-                    <StatRow label="Enriquecimientos este mes" value={d.db?.enrichmentsThisMonth ?? 0} />
                     <StatRow label="Créditos totales histórico" value={d.db?.total ?? 0} dim />
                     <p className="text-[11px] text-muted-foreground mt-3">
                         Apollo no expone balance vía API. Para ver el balance exacto ve a tu dashboard de Apollo.

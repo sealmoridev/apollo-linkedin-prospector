@@ -164,28 +164,49 @@ export default function MiEmpresa() {
 
     // ─ Derived data ──────────────────────────────────────────────────────────
 
-    const totalExtracciones = consumos.length;
+    // sesion_ids que ya tienen una captura con credit_breakdown (nuevo sistema).
+    // Los registros "sueltos" (enrich / verify) del mismo sesion_id no deben
+    // volver a contarse para evitar doble-conteo de créditos.
+    const capturedSesionIds = useMemo(() =>
+        new Set(consumos.filter(c => c.credit_breakdown != null && c.sesion_id != null).map(c => c.sesion_id!)),
+        [consumos]);
+
+    // Extracciones = solo capturas (lead guardado), no registros intermedios
+    const totalExtracciones = useMemo(() => consumos.filter(c => c.lead_data != null).length, [consumos]);
+
     const totalMailCredits = useMemo(() => consumos.reduce((s, c) => {
         if (c.credit_breakdown != null) return s + c.credit_breakdown.email_credits;
+        // Registro sin credit_breakdown: solo contar si NO pertenece a un sesion ya capturado
+        if (c.sesion_id && capturedSesionIds.has(c.sesion_id)) return s;
         return s + c.creditos_apollo;
-    }, 0), [consumos]);
+    }, 0), [consumos, capturedSesionIds]);
+
     const totalPhoneCredits = useMemo(() => consumos.reduce((s, c) => {
         if (c.credit_breakdown != null) return s + c.credit_breakdown.phone_credits;
         return s;
     }, 0), [consumos]);
+
     const totalVerifCredits = useMemo(() => consumos.reduce((s, c) => {
         if (c.credit_breakdown != null) return s + c.credit_breakdown.verification_credits;
+        if (c.sesion_id && capturedSesionIds.has(c.sesion_id)) return s;
         return s + c.creditos_verifier;
-    }, 0), [consumos]);
-    const sdrsActivos = useMemo(() => new Set(consumos.map(c => c.usuario?.email ?? c.usuario_id)).size, [consumos]);
+    }, 0), [consumos, capturedSesionIds]);
+
+    const sdrsActivos = useMemo(() => new Set(consumos.filter(c => c.lead_data != null).map(c => c.usuario?.email ?? c.usuario_id)).size, [consumos]);
 
     const chartData = useMemo(() => {
         const byDate = new Map<string, { date: string; extracciones: number; apollo: number }>();
         consumos.forEach(c => {
             const date = new Date(c.fecha).toLocaleDateString('sv');
             const prev = byDate.get(date) || { date, extracciones: 0, apollo: 0 };
-            prev.extracciones += 1;
-            prev.apollo += c.creditos_apollo;
+            // Solo capturas en extracciones del chart
+            if (c.lead_data != null) prev.extracciones += 1;
+            // Créditos: misma lógica anti-doble-conteo
+            if (c.credit_breakdown != null) {
+                prev.apollo += c.credit_breakdown.email_credits + c.credit_breakdown.phone_credits;
+            } else if (!c.sesion_id || !capturedSesionIds.has(c.sesion_id)) {
+                prev.apollo += c.creditos_apollo;
+            }
             byDate.set(date, prev);
         });
         return fillDateRange(appliedRange.desde, appliedRange.hasta).map(date => ({
@@ -193,7 +214,7 @@ export default function MiEmpresa() {
             extracciones: byDate.get(date)?.extracciones ?? 0,
             apollo: byDate.get(date)?.apollo ?? 0
         }));
-    }, [consumos, appliedRange]);
+    }, [consumos, appliedRange, capturedSesionIds]);
 
     // Ranking SDR: agrupa por email para unificar IDs distintos del mismo SDR
     const sdrRanking = useMemo(() => {
@@ -205,12 +226,13 @@ export default function MiEmpresa() {
                 ?? usuarios.find(u => u.id === c.usuario_id)?.email
                 ?? c.usuario_id;
             const prev = byEmail.get(email) || { email, extracciones: 0, mail: 0, phone: 0, verif: 0 };
-            prev.extracciones += 1;
+            // Solo capturas cuentan como extracción
+            if (c.lead_data != null) prev.extracciones += 1;
             if (c.credit_breakdown != null) {
                 prev.mail += c.credit_breakdown.email_credits;
                 prev.phone += c.credit_breakdown.phone_credits;
                 prev.verif += c.credit_breakdown.verification_credits;
-            } else {
+            } else if (!c.sesion_id || !capturedSesionIds.has(c.sesion_id)) {
                 prev.mail += c.creditos_apollo;
                 prev.verif += c.creditos_verifier;
             }

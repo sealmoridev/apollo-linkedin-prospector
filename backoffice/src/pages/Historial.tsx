@@ -472,9 +472,14 @@ export default function Historial() {
                                             <TableCell className="text-right">
                                                 {(() => {
                                                     const bd = c.credit_breakdown;
-                                                    const v = bd != null
-                                                        ? bd.email_credits
-                                                        : (c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo);
+                                                    let v: number;
+                                                    if (bd != null) {
+                                                        v = bd.email_credits; // nuevo sistema
+                                                    } else if (isCapture) {
+                                                        v = c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo; // captura antigua
+                                                    } else {
+                                                        v = c.creditos_apollo; // registro solo-crédito: solo sus créditos directos
+                                                    }
                                                     return v > 0 ? <Badge variant="secondary">{v}</Badge> : <span className="text-muted-foreground text-sm">—</span>;
                                                 })()}
                                             </TableCell>
@@ -490,9 +495,14 @@ export default function Historial() {
                                             <TableCell className="text-right pr-6">
                                                 {(() => {
                                                     const bd = c.credit_breakdown;
-                                                    const v = bd != null
-                                                        ? bd.verification_credits
-                                                        : (c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier);
+                                                    let v: number;
+                                                    if (bd != null) {
+                                                        v = bd.verification_credits; // nuevo sistema
+                                                    } else if (isCapture) {
+                                                        v = c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier; // captura antigua
+                                                    } else {
+                                                        v = c.creditos_verifier; // registro solo-crédito: solo sus créditos directos
+                                                    }
                                                     return v > 0 ? <Badge variant="outline">{v}</Badge> : <span className="text-muted-foreground text-sm">—</span>;
                                                 })()}
                                             </TableCell>
