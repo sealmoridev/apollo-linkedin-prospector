@@ -165,8 +165,18 @@ export default function MiEmpresa() {
     // ─ Derived data ──────────────────────────────────────────────────────────
 
     const totalExtracciones = consumos.length;
-    const totalApollo = useMemo(() => consumos.reduce((s, c) => s + c.creditos_apollo, 0), [consumos]);
-    const totalVerifier = useMemo(() => consumos.reduce((s, c) => s + c.creditos_verifier, 0), [consumos]);
+    const totalMailCredits = useMemo(() => consumos.reduce((s, c) => {
+        if (c.credit_breakdown != null) return s + c.credit_breakdown.email_credits;
+        return s + c.creditos_apollo;
+    }, 0), [consumos]);
+    const totalPhoneCredits = useMemo(() => consumos.reduce((s, c) => {
+        if (c.credit_breakdown != null) return s + c.credit_breakdown.phone_credits;
+        return s;
+    }, 0), [consumos]);
+    const totalVerifCredits = useMemo(() => consumos.reduce((s, c) => {
+        if (c.credit_breakdown != null) return s + c.credit_breakdown.verification_credits;
+        return s + c.creditos_verifier;
+    }, 0), [consumos]);
     const sdrsActivos = useMemo(() => new Set(consumos.map(c => c.usuario?.email ?? c.usuario_id)).size, [consumos]);
 
     const chartData = useMemo(() => {
@@ -189,20 +199,26 @@ export default function MiEmpresa() {
     const sdrRanking = useMemo(() => {
         // email → primer usuario que tenga ese email (para avatar/nombre)
         const emailToUser = new Map(usuarios.map(u => [u.email, u]));
-        const byEmail = new Map<string, { email: string; extracciones: number; apollo: number; verifier: number }>();
+        const byEmail = new Map<string, { email: string; extracciones: number; mail: number; phone: number; verif: number }>();
         consumos.forEach(c => {
             const email = c.usuario?.email
                 ?? usuarios.find(u => u.id === c.usuario_id)?.email
                 ?? c.usuario_id;
-            const prev = byEmail.get(email) || { email, extracciones: 0, apollo: 0, verifier: 0 };
+            const prev = byEmail.get(email) || { email, extracciones: 0, mail: 0, phone: 0, verif: 0 };
             prev.extracciones += 1;
-            prev.apollo += c.creditos_apollo;
-            prev.verifier += c.creditos_verifier;
+            if (c.credit_breakdown != null) {
+                prev.mail += c.credit_breakdown.email_credits;
+                prev.phone += c.credit_breakdown.phone_credits;
+                prev.verif += c.credit_breakdown.verification_credits;
+            } else {
+                prev.mail += c.creditos_apollo;
+                prev.verif += c.creditos_verifier;
+            }
             byEmail.set(email, prev);
         });
         // Incluir SDRs registrados sin actividad en el período
         usuarios.forEach(u => {
-            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, apollo: 0, verifier: 0 });
+            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, mail: 0, phone: 0, verif: 0 });
         });
         return Array.from(byEmail.values())
             .sort((a, b) => b.extracciones - a.extracciones)
@@ -284,21 +300,31 @@ export default function MiEmpresa() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Créditos Apollo</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Créditos Mail</CardTitle>
                         <Zap className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">{totalApollo}</div>
+                        <div className="text-3xl font-bold">{totalMailCredits}</div>
                         <p className="text-xs text-muted-foreground mt-1">Total consumidos</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Créditos Verifier</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Créditos Tel.</CardTitle>
+                        <Activity className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold">{totalPhoneCredits}</div>
+                        <p className="text-xs text-muted-foreground mt-1">Teléfonos encontrados</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">Créditos Verif.</CardTitle>
                         <CheckCircle className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">{totalVerifier}</div>
+                        <div className="text-3xl font-bold">{totalVerifCredits}</div>
                         <p className="text-xs text-muted-foreground mt-1">Emails verificados</p>
                     </CardContent>
                 </Card>
@@ -372,8 +398,9 @@ export default function MiEmpresa() {
                                     <TableHead>#</TableHead>
                                     <TableHead>SDR</TableHead>
                                     <TableHead className="text-right">Extracciones</TableHead>
-                                    <TableHead className="text-right">Apollo</TableHead>
-                                    <TableHead className="text-right">Verifier</TableHead>
+                                    <TableHead className="text-right">Mail</TableHead>
+                                    <TableHead className="text-right">Tel.</TableHead>
+                                    <TableHead className="text-right">Verif.</TableHead>
                                     <TableHead className="text-right">Desde</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -404,8 +431,9 @@ export default function MiEmpresa() {
                                             <TableCell className="text-right">
                                                 <Badge variant={r.extracciones > 0 ? 'secondary' : 'outline'}>{r.extracciones}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-right text-sm">{r.apollo || '—'}</TableCell>
-                                            <TableCell className="text-right text-sm">{r.verifier || '—'}</TableCell>
+                                            <TableCell className="text-right text-sm">{r.mail || '—'}</TableCell>
+                                            <TableCell className="text-right text-sm">{r.phone || '—'}</TableCell>
+                                            <TableCell className="text-right text-sm">{r.verif || '—'}</TableCell>
                                             <TableCell className="text-right text-sm text-muted-foreground">
                                                 {u?.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : '—'}
                                             </TableCell>

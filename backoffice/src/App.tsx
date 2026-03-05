@@ -15,6 +15,7 @@ import ApiCredits from './pages/ApiCredits';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import CambiarPassword from './pages/CambiarPassword';
+import Tarifas from './pages/Tarifas';
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ function App() {
               {/* SuperAdmin — panel global */}
               <Route path="empresas" element={<Empresas />} />
               <Route path="usuarios" element={<Usuarios />} />
+              <Route path="tarifas" element={<Tarifas />} />
 
               {/* SuperAdmin — vista tenant de empresa */}
               <Route path="empresas/:id" element={<MiEmpresa />} />

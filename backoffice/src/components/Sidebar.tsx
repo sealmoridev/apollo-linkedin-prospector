@@ -6,7 +6,7 @@ import { getEmpresas } from '../lib/api';
 import type { EmpresaDetail } from '../lib/api';
 import {
     Building2, LogOut, LayoutDashboard, PlugZap, History, Users,
-    ArrowLeft, ChevronLeft, ChevronRight, ArrowLeftRight, Globe, Loader2, CreditCard
+    ArrowLeft, ChevronLeft, ChevronRight, ArrowLeftRight, Globe, Loader2, CreditCard, Coins
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -70,6 +70,7 @@ export function Sidebar() {
             return [
                 { to: '/empresas', label: 'Empresas', Icon: Building2, exact: false },
                 { to: '/usuarios', label: 'Usuarios', Icon: Users, exact: false },
+                { to: '/tarifas', label: 'Tarifas', Icon: Coins, exact: false },
             ];
         }
         return [

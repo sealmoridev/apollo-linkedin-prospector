@@ -496,6 +496,92 @@ app.post('/api/enrich-field', tenantAuthMiddleware, async (req: Request, res: Re
 });
 
 // ============================================================================
+// CREDIT BREAKDOWN HELPERS
+// ============================================================================
+
+const DEFAULT_RATES: Record<string, number> = {
+  'apollo.email': 1,
+  'apollo.phone': 8,
+  'prospeo.email': 1,
+  'prospeo.phone': 10,
+  'leadmagic.email': 1,
+  'leadmagic.phone': 5,
+  'findymail.email': 1,
+  'findymail.phone': 1,
+  'millionverifier.verification': 1,
+};
+
+async function loadRates(): Promise<Record<string, number>> {
+  try {
+    const dbRates = await prisma.creditRate.findMany();
+    const result = { ...DEFAULT_RATES };
+    for (const r of dbRates) {
+      result[`${r.provider}.${r.field_type}`] = r.credits;
+    }
+    return result;
+  } catch {
+    return { ...DEFAULT_RATES };
+  }
+}
+
+interface CreditBreakdownInput {
+  primaryProvider: string;
+  emailProvider: string | null;
+  phoneProvider: string | null;
+  verifierCalled: boolean;
+  rates: Record<string, number>;
+}
+
+interface CreditBreakdown {
+  email_credits: number;
+  phone_credits: number;
+  verification_credits: number;
+  providers: Record<string, number>;
+}
+
+function computeCreditBreakdown(input: CreditBreakdownInput): CreditBreakdown {
+  const { primaryProvider, emailProvider, phoneProvider, verifierCalled, rates } = input;
+  const providers: Record<string, number> = {};
+
+  // Primary always charges email rate
+  const primaryEmailRate = rates[`${primaryProvider}.email`] ?? 1;
+  providers[primaryProvider] = primaryEmailRate;
+
+  // Cascade found email from different provider
+  let cascadeEmailCredits = 0;
+  if (emailProvider && emailProvider !== primaryProvider) {
+    const cascadeRate = rates[`${emailProvider}.email`] ?? 1;
+    providers[emailProvider] = (providers[emailProvider] ?? 0) + cascadeRate;
+    cascadeEmailCredits = cascadeRate;
+  }
+
+  // Phone: only charge if found
+  let phoneCredits = 0;
+  if (phoneProvider) {
+    const phoneRate = rates[`${phoneProvider}.phone`] ?? 0;
+    if (phoneRate > 0) {
+      providers[phoneProvider] = (providers[phoneProvider] ?? 0) + phoneRate;
+      phoneCredits = phoneRate;
+    }
+  }
+
+  // MillionVerifier: 1 credit per call regardless of result
+  let verificationCredits = 0;
+  if (verifierCalled) {
+    const verRate = rates['millionverifier.verification'] ?? 1;
+    providers['millionverifier'] = (providers['millionverifier'] ?? 0) + verRate;
+    verificationCredits = verRate;
+  }
+
+  return {
+    email_credits: primaryEmailRate + cascadeEmailCredits,
+    phone_credits: phoneCredits,
+    verification_credits: verificationCredits,
+    providers,
+  };
+}
+
+// ============================================================================
 // RUTAS DE GOOGLE SHEETS (PASO 2)
 // ============================================================================
 
@@ -543,7 +629,7 @@ app.post('/api/sheets/create', async (req: Request, res: Response) => {
 // Guardar datos en una hoja específica
 app.post('/api/sheets/save', async (req: Request, res: Response) => {
   try {
-    const { userId = 'default', spreadsheetId, lead, sheetName, sesion_id, provider = 'apollo', emailProvider, phoneProvider } = req.body;
+    const { userId = 'default', spreadsheetId, lead, sheetName, sesion_id, provider = 'apollo', emailProvider, phoneProvider, verifierCalled = false } = req.body;
 
     if (!spreadsheetId || !lead) {
       return res.status(400).json({
@@ -574,6 +660,16 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
         const primaryEmail = (lead as any).primaryEmail || lead.email || lead.personalEmail || null;
         const rawStatus = (lead as any).emailStatus;
         try {
+          // Compute credit breakdown
+          const rates = await loadRates();
+          const breakdown = computeCreditBreakdown({
+            primaryProvider: provider || 'apollo',
+            emailProvider: emailProvider || null,
+            phoneProvider: phoneProvider || null,
+            verifierCalled: !!verifierCalled,
+            rates,
+          });
+
           await prisma.consumo.create({
             data: {
               usuario_id: extensionUser.id,
@@ -583,6 +679,7 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
               sesion_id: sesion_id || null,
               sheet_id: sheetResult.spreadsheetId || spreadsheetId,
               sheet_name: sheetName || null,
+              credit_breakdown: breakdown as any,
               lead_data: {
                 created_at: new Date().toISOString(),
                 full_name: lead.fullName || null,

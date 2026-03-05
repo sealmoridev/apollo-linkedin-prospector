@@ -227,22 +227,24 @@ export default function Historial() {
                 'Fecha', 'Nombre completo', 'Nombre', 'Apellido', 'Título',
                 'Email principal', 'Email personal', 'Teléfono',
                 'Empresa', 'Dominio', 'Industria', 'Ubicación', 'LinkedIn',
-                'Estado email', 'Sheet', 'SDR', 'Apollo', 'Verifier'
+                'Estado email', 'Sheet', 'SDR', 'Créditos Mail', 'Créditos Tel.', 'Créditos Verif.'
             ];
 
             const csvRows = rows.map(c => {
                 const ld = c.lead_data;
                 const sdr = sdrMap.get(c.usuario_id);
                 const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || '';
-                const apollo = c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
-                const verifier = c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier;
+                const bd = c.credit_breakdown;
+                const mailC = bd != null ? bd.email_credits : (c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo);
+                const telC = bd != null ? bd.phone_credits : '';
+                const verifC = bd != null ? bd.verification_credits : (c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier);
                 return [
                     new Date(c.fecha).toLocaleString('es-CL'),
                     ld?.full_name, ld?.first_name, ld?.last_name, ld?.title,
                     ld?.primary_email, ld?.personal_email, ld?.phone_number,
                     ld?.company_name, ld?.company_domain, ld?.industry,
                     ld?.location, ld?.linkedin_url, ld?.email_status,
-                    c.sheet_name, sdrLabel, apollo, verifier,
+                    c.sheet_name, sdrLabel, mailC, telC, verifC,
                 ].map(escape).join(',');
             });
 
@@ -398,18 +400,19 @@ export default function Historial() {
                                 <TableHead>SDR</TableHead>
                                 <TableHead>Sheet</TableHead>
                                 <TableHead>Vía</TableHead>
-                                <TableHead className="text-right">Créditos</TableHead>
-                                <TableHead className="text-right pr-6">Verifier</TableHead>
+                                <TableHead className="text-right">Mail</TableHead>
+                                <TableHead className="text-right">Tel.</TableHead>
+                                <TableHead className="text-right pr-6">Verif.</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loadingData ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
+                                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground animate-pulse">Cargando...</TableCell>
                                 </TableRow>
                             ) : data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
+                                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">Sin registros para los filtros seleccionados.</TableCell>
                                 </TableRow>
                             ) : (
                                 data.map(c => {
@@ -468,13 +471,28 @@ export default function Historial() {
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 {(() => {
-                                                    const v = c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
+                                                    const bd = c.credit_breakdown;
+                                                    const v = bd != null
+                                                        ? bd.email_credits
+                                                        : (c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo);
                                                     return v > 0 ? <Badge variant="secondary">{v}</Badge> : <span className="text-muted-foreground text-sm">—</span>;
+                                                })()}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {(() => {
+                                                    const bd = c.credit_breakdown;
+                                                    if (!bd) return <span className="text-muted-foreground text-sm">—</span>;
+                                                    return bd.phone_credits > 0
+                                                        ? <Badge variant="secondary">{bd.phone_credits}</Badge>
+                                                        : <span className="text-muted-foreground text-sm">—</span>;
                                                 })()}
                                             </TableCell>
                                             <TableCell className="text-right pr-6">
                                                 {(() => {
-                                                    const v = c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier;
+                                                    const bd = c.credit_breakdown;
+                                                    const v = bd != null
+                                                        ? bd.verification_credits
+                                                        : (c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier);
                                                     return v > 0 ? <Badge variant="outline">{v}</Badge> : <span className="text-muted-foreground text-sm">—</span>;
                                                 })()}
                                             </TableCell>
@@ -627,6 +645,44 @@ export default function Historial() {
                                                         <span className="text-muted-foreground text-xs">Teléfono</span>
                                                         {ld.phone_provider ? chip(ld.phone_provider) : dash}
                                                     </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                    {selectedCapture && (() => {
+                                        const consumo = data.find(c => c.id === selectedCapture.consumoId);
+                                        const bd = consumo?.credit_breakdown;
+                                        if (!bd) return null;
+                                        const provNames: Record<string, string> = { apollo: 'Apollo', prospeo: 'Prospeo', findymail: 'Findymail', leadmagic: 'LeadMagic', millionverifier: 'MillionVerifier' };
+                                        return (
+                                            <>
+                                                <Separator />
+                                                <div className="space-y-2">
+                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Créditos consumidos</p>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div className="rounded-lg border bg-muted/30 p-2 text-center">
+                                                            <p className="text-[10px] text-muted-foreground">Mail</p>
+                                                            <p className="text-base font-bold">{bd.email_credits}</p>
+                                                        </div>
+                                                        <div className="rounded-lg border bg-muted/30 p-2 text-center">
+                                                            <p className="text-[10px] text-muted-foreground">Tel.</p>
+                                                            <p className="text-base font-bold">{bd.phone_credits}</p>
+                                                        </div>
+                                                        <div className="rounded-lg border bg-muted/30 p-2 text-center">
+                                                            <p className="text-[10px] text-muted-foreground">Verif.</p>
+                                                            <p className="text-base font-bold">{bd.verification_credits}</p>
+                                                        </div>
+                                                    </div>
+                                                    {Object.keys(bd.providers).length > 0 && (
+                                                        <div className="space-y-1 pt-1">
+                                                            {Object.entries(bd.providers).map(([prov, credits]) => (
+                                                                <div key={prov} className="flex items-center justify-between text-xs">
+                                                                    <span className="text-muted-foreground">{provNames[prov] ?? prov}</span>
+                                                                    <Badge variant="secondary" className="text-[10px]">{credits} créditos</Badge>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </>
                                         );

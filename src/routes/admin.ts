@@ -757,6 +757,58 @@ router.delete('/consumos/:id/lead', requireAdmin, requireSuperAdmin, async (req:
 });
 
 // ============================================================================
+// ============================================================================
+// TARIFAS DE CRÉDITOS (CreditRate)
+// ============================================================================
+
+const DEFAULT_CREDIT_RATES = [
+    { provider: 'apollo',          field_type: 'email',        credits: 1  },
+    { provider: 'apollo',          field_type: 'phone',        credits: 8  },
+    { provider: 'prospeo',         field_type: 'email',        credits: 1  },
+    { provider: 'prospeo',         field_type: 'phone',        credits: 10 },
+    { provider: 'leadmagic',       field_type: 'email',        credits: 1  },
+    { provider: 'leadmagic',       field_type: 'phone',        credits: 5  },
+    { provider: 'findymail',       field_type: 'email',        credits: 1  },
+    { provider: 'findymail',       field_type: 'phone',        credits: 1  },
+    { provider: 'millionverifier', field_type: 'verification', credits: 1  },
+];
+
+/** GET /api/admin/credit-rates — list all rates (any admin) */
+router.get('/credit-rates', requireAdmin, async (_req: Request, res: Response) => {
+    try {
+        const rates = await prisma.creditRate.findMany({ orderBy: [{ provider: 'asc' }, { field_type: 'asc' }] });
+        // If DB is empty, return defaults
+        if (rates.length === 0) {
+            return res.json(DEFAULT_CREDIT_RATES.map(r => ({ ...r, id: `${r.provider}.${r.field_type}`, updatedAt: null })));
+        }
+        res.json(rates);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener tarifas' });
+    }
+});
+
+/** PUT /api/admin/credit-rates — upsert rates (SA only) */
+router.put('/credit-rates', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+    try {
+        const { rates } = req.body as { rates: { provider: string; field_type: string; credits: number }[] };
+        if (!Array.isArray(rates) || rates.length === 0) {
+            return res.status(400).json({ error: 'rates array required' });
+        }
+
+        const results = await Promise.all(rates.map(r =>
+            prisma.creditRate.upsert({
+                where: { provider_field_type: { provider: r.provider, field_type: r.field_type } },
+                update: { credits: r.credits },
+                create: { provider: r.provider, field_type: r.field_type, credits: r.credits }
+            })
+        ));
+        res.json(results);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al guardar tarifas' });
+    }
+});
+
+// ============================================================================
 // CRÉDITOS DE API — consulta balance real de cada proveedor
 // ============================================================================
 
@@ -801,6 +853,30 @@ router.get('/api-credits', requireAdmin, async (req: Request, res: Response) => 
             where: { empresa_id: targetId, creditos_apollo: { gt: 0 } },
             _sum: { creditos_apollo: true },
         });
+
+        // ── Provider DB usage from credit_breakdown ───────────────────────────
+        // Sum up credit_breakdown.providers per provider from all consumos with lead_data
+        const allConsumos = await prisma.consumo.findMany({
+            where: { empresa_id: targetId, lead_data: { not: Prisma.JsonNull } },
+            select: { credit_breakdown: true, fecha: true }
+        });
+
+        const providerDbUsage: Record<string, { thisMonth: number; total: number }> = {};
+        const providerNames = ['apollo', 'prospeo', 'leadmagic', 'findymail', 'millionverifier'];
+        for (const name of providerNames) {
+            providerDbUsage[name] = { thisMonth: 0, total: 0 };
+        }
+
+        for (const c of allConsumos) {
+            const bd = c.credit_breakdown as any;
+            if (!bd?.providers) continue;
+            const isThisMonth = new Date(c.fecha) >= firstOfMonth;
+            for (const [prov, credits] of Object.entries(bd.providers as Record<string, number>)) {
+                if (!providerDbUsage[prov]) providerDbUsage[prov] = { thisMonth: 0, total: 0 };
+                providerDbUsage[prov].total += credits;
+                if (isThisMonth) providerDbUsage[prov].thisMonth += credits;
+            }
+        }
 
         // ── Prospeo ──────────────────────────────────────────────────────────
         let prospeoData: any = null;
@@ -855,29 +931,32 @@ router.get('/api-credits', requireAdmin, async (req: Request, res: Response) => 
                 configured: !!empresa.apollo_api_key,
                 note: 'Apollo no expone balance vía API pública',
                 db: {
-                    thisMonth: apolloMonth._sum.creditos_apollo ?? 0,
-                    total: apolloTotal._sum.creditos_apollo ?? 0,
+                    thisMonth: providerDbUsage['apollo']?.thisMonth ?? (apolloMonth._sum.creditos_apollo ?? 0),
+                    total: providerDbUsage['apollo']?.total ?? (apolloTotal._sum.creditos_apollo ?? 0),
                     enrichmentsThisMonth: apolloMonth._count._all,
                 },
             },
             prospeo: {
                 configured: !!empresa.prospeo_api_key,
                 ...(prospeoData ?? {}),
+                db: providerDbUsage['prospeo'] ?? { thisMonth: 0, total: 0 },
             },
             leadmagic: {
                 configured: !!empresa.leadmagic_api_key,
                 ...(leadmagicData ?? {}),
+                db: providerDbUsage['leadmagic'] ?? { thisMonth: 0, total: 0 },
             },
             findymail: {
                 configured: !!empresa.findymail_api_key,
                 ...(findymailData ?? {}),
+                db: providerDbUsage['findymail'] ?? { thisMonth: 0, total: 0 },
             },
             millionverifier: {
                 configured: !!empresa.millionverifier_api_key,
                 ...(millionData ?? {}),
                 db: {
-                    thisMonth: millionMonthDB._sum.creditos_verifier ?? 0,
-                    total: millionTotalDB._sum.creditos_verifier ?? 0,
+                    thisMonth: providerDbUsage['millionverifier']?.thisMonth ?? (millionMonthDB._sum.creditos_verifier ?? 0),
+                    total: providerDbUsage['millionverifier']?.total ?? (millionTotalDB._sum.creditos_verifier ?? 0),
                 },
             },
         });

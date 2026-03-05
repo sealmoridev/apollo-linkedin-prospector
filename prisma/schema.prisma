@@ -81,5 +81,17 @@ model Consumo {
   sheet_id          String?
   sheet_name        String?
 
+  credit_breakdown  Json?
+
   fecha             DateTime @default(now())
+}
+
+model CreditRate {
+  id         String   @id @default(uuid())
+  provider   String   // 'apollo','prospeo','leadmagic','findymail','millionverifier'
+  field_type String   // 'email','phone','verification'
+  credits    Int
+  updatedAt  DateTime @updatedAt
+
+  @@unique([provider, field_type])
 }

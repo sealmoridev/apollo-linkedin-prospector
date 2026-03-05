@@ -135,6 +135,9 @@ function ProviderCard({
                             dim
                         />
                     )}
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold mt-3 mb-1">Uso registrado (nuestra DB)</p>
+                    <StatRow label="Créditos este mes" value={d.db?.thisMonth ?? 0} />
+                    <StatRow label="Créditos totales histórico" value={d.db?.total ?? 0} dim />
                 </div>
             );
         }
@@ -147,8 +150,11 @@ function ProviderCard({
                     {balance != null ? (
                         <StatRow label="Balance actual" value={Number(balance).toLocaleString()} />
                     ) : (
-                        <p className="text-xs text-muted-foreground mt-2">Sin datos disponibles</p>
+                        <p className="text-xs text-muted-foreground mt-2">Sin datos de la API</p>
                     )}
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold mt-3 mb-1">Uso registrado (nuestra DB)</p>
+                    <StatRow label="Créditos este mes" value={d.db?.thisMonth ?? 0} />
+                    <StatRow label="Créditos totales histórico" value={d.db?.total ?? 0} dim />
                 </div>
             );
         }
@@ -166,8 +172,11 @@ function ProviderCard({
                         <StatRow label="Créditos usados" value={Number(used).toLocaleString()} dim />
                     ) : null}
                     {balance == null && used == null && (
-                        <p className="text-xs text-muted-foreground mt-2">Sin datos disponibles</p>
+                        <p className="text-xs text-muted-foreground mt-2">Sin datos de la API</p>
                     )}
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold mt-3 mb-1">Uso registrado (nuestra DB)</p>
+                    <StatRow label="Créditos este mes" value={d.db?.thisMonth ?? 0} />
+                    <StatRow label="Créditos totales histórico" value={d.db?.total ?? 0} dim />
                 </div>
             );
         }

@@ -19,6 +19,7 @@ let currentSesionId = crypto.randomUUID();
 let isAuthenticated = false;
 let extractedLeadData = null;
 let hasExtractedCurrentProfile = false;
+let verifierCalled = false;
 let currentEnrichmentProvider = 'apollo';
 let primaryPhoneEnabled = false; // true only when primary provider fetches phone (e.g. Prospeo with toggle on)
 let configuredProviders = [];
@@ -374,6 +375,7 @@ const getProviderIconUrl = (providerId) => {
         previewSection.style.display = 'none';
         extractedLeadData = null;
         cascadeResults = { email: [], phone: [] };
+        verifierCalled = false;
 
         if (saveBtn) {
             saveBtn.disabled = false;
@@ -859,6 +861,7 @@ const getProviderIconUrl = (providerId) => {
                 });
 
                 const data = await response.json();
+                verifierCalled = true;
                 validateEmailBtn.style.display = 'none';
                 emailBadge.style.display = 'inline-flex';
 
@@ -973,7 +976,8 @@ const getProviderIconUrl = (providerId) => {
                     sesion_id: currentSesionId,
                     provider: currentEnrichmentProvider,
                     emailProvider,
-                    phoneProvider
+                    phoneProvider,
+                    verifierCalled
                 })
             });
 

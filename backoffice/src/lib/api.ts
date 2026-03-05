@@ -65,6 +65,21 @@ export interface LeadData {
     sdr_mail: string | null;
 }
 
+export interface CreditBreakdown {
+    email_credits: number;
+    phone_credits: number;
+    verification_credits: number;
+    providers: Record<string, number>;
+}
+
+export interface CreditRate {
+    id: string;
+    provider: string;
+    field_type: string;
+    credits: number;
+    updatedAt: string | null;
+}
+
 export interface Consumo {
     id: string;
     usuario_id: string;
@@ -79,6 +94,7 @@ export interface Consumo {
     lead_data: LeadData | null;
     sheet_id: string | null;
     sheet_name: string | null;
+    credit_breakdown: CreditBreakdown | null;
     usuario: { email: string; id: string };
     empresa: { nombre: string };
 }
@@ -386,15 +402,18 @@ export interface ApiCreditsResult {
         used_credits?: number;
         current_plan?: string;
         next_quota_renewal_date?: string;
+        db: { thisMonth: number; total: number };
     };
     leadmagic: {
         configured: boolean;
         error?: string;
         credits?: number;
+        db: { thisMonth: number; total: number };
     };
     findymail: {
         configured: boolean;
         error?: string;
+        db: { thisMonth: number; total: number };
         [key: string]: unknown;
     };
     millionverifier: {
@@ -467,6 +486,34 @@ export const deleteConsumoLead = async (id: string): Promise<Consumo> => {
     if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Error al eliminar lead');
+    }
+    return res.json();
+};
+
+// ==========================================
+// CREDIT RATES (SuperAdmin)
+// ==========================================
+
+export const getCreditRates = async (): Promise<CreditRate[]> => {
+    const res = await fetch(`${API_URL}/admin/credit-rates`, { headers: getAuthHeaders() });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al obtener tarifas');
+    }
+    return res.json();
+};
+
+export const updateCreditRates = async (
+    rates: { provider: string; field_type: string; credits: number }[]
+): Promise<CreditRate[]> => {
+    const res = await fetch(`${API_URL}/admin/credit-rates`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ rates })
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al guardar tarifas');
     }
     return res.json();
 };
