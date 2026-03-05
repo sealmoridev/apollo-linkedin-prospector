@@ -79,6 +79,7 @@ export function Sidebar() {
             { to: '/apis', label: 'APIs', Icon: PlugZap, exact: false },
             { to: '/api-credits', label: 'Consumos', Icon: CreditCard, exact: false },
             { to: '/extension', label: 'Extensión Chrome', Icon: Globe, exact: false },
+            { to: '/usuarios', label: 'Equipo', Icon: Users, exact: false },
         ];
     })();
 

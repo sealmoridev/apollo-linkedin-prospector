@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumoHistorial, getConsumoSheetNames } from '../lib/api';
+import { getMiEmpresa, getEmpresa, getEmpresaUsuarios, getConsumoHistorial, getConsumoSheetNames, updateConsumoLead, deleteConsumoLead } from '../lib/api';
 import type { EmpresaDetail, ExtensionUser, Consumo, LeadData } from '../lib/api';
 import { useActiveEmpresa } from '../ActiveEmpresaContext';
+import { useAuth } from '../AuthContext';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,7 +15,15 @@ import {
 import { Badge } from '../components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
 import { Separator } from '../components/ui/separator';
-import { Search, Download, X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Search, Download, X, ChevronLeft, ChevronRight, ExternalLink, Pencil, Trash2 } from 'lucide-react';
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+} from '../components/ui/dialog';
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '../components/ui/alert-dialog';
+import { Label } from '../components/ui/label';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -60,6 +69,8 @@ function Pagination({ page, totalPages, onChange }: PaginationProps) {
 export default function Historial() {
     const { id: empresaId } = useParams<{ id?: string }>();
     const { setActiveEmpresa } = useActiveEmpresa();
+    const { user: authUser } = useAuth();
+    const isSuperAdmin = authUser?.role === 'SUPERADMIN';
 
     const [empresa, setEmpresa] = useState<EmpresaDetail | null>(null);
     const [sdrs, setSdrs] = useState<ExtensionUser[]>([]);
@@ -72,7 +83,16 @@ export default function Historial() {
 
     // Detail panel
     const [panelOpen, setPanelOpen] = useState(false);
-    const [selectedCapture, setSelectedCapture] = useState<{ lead: LeadData; sheet_name: string | null } | null>(null);
+    const [selectedCapture, setSelectedCapture] = useState<{ consumoId: string; lead: LeadData; sheet_name: string | null } | null>(null);
+
+    // Edit lead dialog
+    const [editLeadOpen, setEditLeadOpen] = useState(false);
+    const [editLeadFields, setEditLeadFields] = useState<Record<string, string>>({});
+    const [savingLead, setSavingLead] = useState(false);
+
+    // Delete lead dialog
+    const [deleteLeadOpen, setDeleteLeadOpen] = useState(false);
+    const [deletingLead, setDeletingLead] = useState(false);
 
     // Filters
     const [searchInput, setSearchInput] = useState('');
@@ -402,7 +422,7 @@ export default function Historial() {
                                         <TableRow
                                             key={c.id}
                                             className={isCapture ? 'cursor-pointer hover:bg-muted/50' : ''}
-                                            onClick={isCapture ? () => { setSelectedCapture({ lead: ld!, sheet_name: c.sheet_name }); setPanelOpen(true); } : undefined}
+                                            onClick={isCapture ? () => { setSelectedCapture({ consumoId: c.id, lead: ld!, sheet_name: c.sheet_name }); setPanelOpen(true); } : undefined}
                                         >
                                             <TableCell className="pl-6 text-xs text-muted-foreground whitespace-nowrap">
                                                 {new Date(c.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -485,11 +505,50 @@ export default function Historial() {
                         return (
                             <>
                                 <SheetHeader>
-                                    <SheetTitle>{ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
-                                    <SheetDescription className="flex flex-wrap gap-1.5 items-center">
-                                        {ld.title && <span>{ld.title}</span>}
-                                        {ld.company_name && <span>· {ld.company_name}</span>}
-                                    </SheetDescription>
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <SheetTitle>{ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
+                                            <SheetDescription className="flex flex-wrap gap-1.5 items-center mt-1">
+                                                {ld.title && <span>{ld.title}</span>}
+                                                {ld.company_name && <span>· {ld.company_name}</span>}
+                                            </SheetDescription>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <Button
+                                                variant="ghost" size="sm"
+                                                className="h-8 w-8 p-0"
+                                                title="Editar datos"
+                                                onClick={() => {
+                                                    setEditLeadFields({
+                                                        full_name: ld.full_name || '',
+                                                        first_name: ld.first_name || '',
+                                                        last_name: ld.last_name || '',
+                                                        title: ld.title || '',
+                                                        primary_email: ld.primary_email || '',
+                                                        personal_email: ld.personal_email || '',
+                                                        phone_number: ld.phone_number || '',
+                                                        company_name: ld.company_name || '',
+                                                        company_domain: ld.company_domain || '',
+                                                        industry: ld.industry || '',
+                                                        location: ld.location || '',
+                                                    });
+                                                    setEditLeadOpen(true);
+                                                }}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                            {isSuperAdmin && (
+                                                <Button
+                                                    variant="ghost" size="sm"
+                                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    title="Eliminar datos del lead"
+                                                    onClick={() => setDeleteLeadOpen(true)}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </SheetHeader>
                                 <div className="px-6 pb-6 space-y-4">
                                     <Separator />
@@ -578,6 +637,128 @@ export default function Historial() {
                     })()}
                 </SheetContent>
             </Sheet>
+
+            {/* Edit lead dialog */}
+            <Dialog open={editLeadOpen} onOpenChange={v => { if (!v) setEditLeadOpen(false); }}>
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Editar datos del lead</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { key: 'full_name', label: 'Nombre completo' },
+                                { key: 'first_name', label: 'Nombre' },
+                                { key: 'last_name', label: 'Apellido' },
+                                { key: 'title', label: 'Cargo' },
+                                { key: 'primary_email', label: 'Email principal' },
+                                { key: 'personal_email', label: 'Email personal' },
+                                { key: 'phone_number', label: 'Teléfono' },
+                            ].map(({ key, label }) => (
+                                <div key={key} className={key === 'full_name' || key === 'primary_email' || key === 'personal_email' ? 'col-span-2' : ''}>
+                                    <Label className="text-xs">{label}</Label>
+                                    <Input
+                                        className="h-8 text-sm mt-1"
+                                        value={editLeadFields[key] ?? ''}
+                                        onChange={e => setEditLeadFields(prev => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder="—"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">Empresa</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { key: 'company_name', label: 'Empresa' },
+                                { key: 'company_domain', label: 'Dominio' },
+                                { key: 'industry', label: 'Industria' },
+                                { key: 'location', label: 'Ubicación' },
+                            ].map(({ key, label }) => (
+                                <div key={key}>
+                                    <Label className="text-xs">{label}</Label>
+                                    <Input
+                                        className="h-8 text-sm mt-1"
+                                        value={editLeadFields[key] ?? ''}
+                                        onChange={e => setEditLeadFields(prev => ({ ...prev, [key]: e.target.value }))}
+                                        placeholder="—"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditLeadOpen(false)}>Cancelar</Button>
+                        <Button
+                            disabled={savingLead}
+                            onClick={async () => {
+                                if (!selectedCapture) return;
+                                setSavingLead(true);
+                                try {
+                                    await updateConsumoLead(selectedCapture.consumoId, editLeadFields as any);
+                                    const updatedLead = { ...selectedCapture.lead, ...editLeadFields };
+                                    setSelectedCapture({ ...selectedCapture, lead: updatedLead as LeadData });
+                                    setData(prev => prev.map(c =>
+                                        c.id === selectedCapture.consumoId
+                                            ? { ...c, lead_data: updatedLead }
+                                            : c
+                                    ));
+                                    toast.success('Lead actualizado');
+                                    setEditLeadOpen(false);
+                                } catch (err: any) {
+                                    toast.error(err.message || 'Error al actualizar');
+                                } finally {
+                                    setSavingLead(false);
+                                }
+                            }}
+                        >
+                            {savingLead ? 'Guardando...' : 'Guardar'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete lead confirmation */}
+            <AlertDialog open={deleteLeadOpen} onOpenChange={v => { if (!v) setDeleteLeadOpen(false); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar datos del lead?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Se borrarán los datos de contacto y empresa de este registro.
+                            El registro de créditos se conservará. Esta acción no se puede deshacer.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={deletingLead}
+                            onClick={async () => {
+                                if (!selectedCapture) return;
+                                setDeletingLead(true);
+                                try {
+                                    await deleteConsumoLead(selectedCapture.consumoId);
+                                    setData(prev => prev.map(c =>
+                                        c.id === selectedCapture.consumoId
+                                            ? { ...c, lead_data: null }
+                                            : c
+                                    ));
+                                    toast.success('Datos del lead eliminados');
+                                    setDeleteLeadOpen(false);
+                                    setPanelOpen(false);
+                                    setSelectedCapture(null);
+                                } catch (err: any) {
+                                    toast.error(err.message || 'Error al eliminar');
+                                } finally {
+                                    setDeletingLead(false);
+                                }
+                            }}
+                        >
+                            {deletingLead ? 'Eliminando...' : 'Eliminar'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

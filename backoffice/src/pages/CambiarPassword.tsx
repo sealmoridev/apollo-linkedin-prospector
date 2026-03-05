@@ -1,36 +1,39 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { login } from '../lib/api';
+import { changeMyPassword } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, KeyRound } from 'lucide-react';
 
-export default function Login() {
-    const [email, setEmail] = useState('');
+export default function CambiarPassword() {
     const [password, setPassword] = useState('');
+    const [confirm, setConfirm] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { loginUser } = useAuth();
+    const { logoutUser } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (password !== confirm) {
+            toast.error('Las contraseñas no coinciden');
+            return;
+        }
+        if (password.length < 8) {
+            toast.error('La contraseña debe tener al menos 8 caracteres');
+            return;
+        }
         setIsSubmitting(true);
         try {
-            const { token, user, mustChangePassword } = await login(email, password);
-            loginUser(token, user);
-            if (mustChangePassword) {
-                toast.info('Debes establecer una nueva contraseña antes de continuar.');
-                navigate('/cambiar-password');
-            } else {
-                toast.success('Bienvenido');
-                navigate('/');
-            }
+            await changeMyPassword(password);
+            toast.success('Contraseña actualizada. Inicia sesión de nuevo.');
+            logoutUser();
+            navigate('/login');
         } catch (error: any) {
-            toast.error(error.message || 'Credenciales incorrectas');
+            toast.error(error.message || 'Error al cambiar contraseña');
         } finally {
             setIsSubmitting(false);
         }
@@ -38,62 +41,48 @@ export default function Login() {
 
     return (
         <div className="flex min-h-screen w-full">
-            {/* Panel izquierdo — branding */}
             <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center bg-primary px-12">
                 <img
                     src={`${import.meta.env.BASE_URL}mrprospect-logo.png`}
                     alt="MR. PROSPECT"
                     className="w-72 brightness-0 invert"
                 />
-                <p className="mt-6 text-center text-primary-foreground/80 text-sm max-w-xs">
-                    Panel de administración para gestionar empresas, SDRs y consumos de prospección.
-                </p>
             </div>
 
-            {/* Panel derecho — formulario */}
             <div className="flex w-full lg:w-1/2 flex-col items-center justify-center px-8 py-12 bg-background">
                 <div className="w-full max-w-sm space-y-8">
-                    {/* Logo mobile */}
                     <div className="flex justify-center lg:hidden">
                         <img src={`${import.meta.env.BASE_URL}isotipo.png`} alt="MR. PROSPECT" className="h-14" />
                     </div>
 
-                    <div className="space-y-2">
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                            Iniciar sesión
-                        </h1>
-                        <p className="text-muted-foreground text-sm">
-                            Accede al panel de administración
-                        </p>
+                    <div className="flex flex-col items-center gap-3 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                            <KeyRound className="h-7 w-7 text-primary" />
+                        </div>
+                        <div className="space-y-1">
+                            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                                Establece tu contraseña
+                            </h1>
+                            <p className="text-muted-foreground text-sm">
+                                Crea una contraseña segura para tu cuenta antes de continuar.
+                            </p>
+                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-sm font-medium">
-                                Correo electrónico
-                            </Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="admin@empresa.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                                className="h-11"
-                            />
-                        </div>
-                        <div className="space-y-2">
                             <Label htmlFor="password" className="text-sm font-medium">
-                                Contraseña
+                                Nueva contraseña
                             </Label>
                             <div className="relative">
                                 <Input
                                     id="password"
                                     type={showPassword ? 'text' : 'password'}
-                                    placeholder="••••••••"
+                                    placeholder="Mínimo 8 caracteres"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
+                                    minLength={8}
                                     className="h-11 pr-10"
                                 />
                                 <button
@@ -106,24 +95,33 @@ export default function Login() {
                                 </button>
                             </div>
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="confirm" className="text-sm font-medium">
+                                Confirmar contraseña
+                            </Label>
+                            <Input
+                                id="confirm"
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Repite la contraseña"
+                                value={confirm}
+                                onChange={(e) => setConfirm(e.target.value)}
+                                required
+                                minLength={8}
+                                className="h-11"
+                            />
+                        </div>
                         <Button
                             className="w-full h-11 text-base font-semibold"
                             type="submit"
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'Verificando...' : 'Entrar'}
+                            {isSubmitting ? 'Guardando...' : 'Establecer contraseña'}
                         </Button>
                     </form>
 
-                    <div className="flex flex-col items-center gap-3 mt-8">
-                        <div className="flex gap-4 text-xs text-muted-foreground">
-                            <Link to="/terminos" className="hover:text-foreground transition-colors">Términos</Link>
-                            <Link to="/privacidad" className="hover:text-foreground transition-colors">Privacidad</Link>
-                        </div>
-                        <p className="text-center text-xs text-muted-foreground">
-                            MR. PROSPECT © {new Date().getFullYear()}
-                        </p>
-                    </div>
+                    <p className="text-center text-xs text-muted-foreground">
+                        Después de guardar serás redirigido al inicio de sesión.
+                    </p>
                 </div>
             </div>
         </div>

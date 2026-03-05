@@ -426,3 +426,47 @@ export const changeAdminUserPassword = async (id: string, newPassword: string): 
         throw new Error(err.error || 'Error al cambiar contraseña');
     }
 };
+
+export const changeMyPassword = async (newPassword: string): Promise<void> => {
+    const res = await fetch(`${API_URL}/admin/me/change-password`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ newPassword })
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al cambiar contraseña');
+    }
+};
+
+// ==========================================
+// LEAD DATA CRUD
+// ==========================================
+
+export const updateConsumoLead = async (
+    id: string,
+    data: Partial<Pick<LeadData, 'full_name' | 'first_name' | 'last_name' | 'title' | 'primary_email' | 'personal_email' | 'phone_number' | 'company_name' | 'company_domain' | 'industry' | 'location'>>
+): Promise<Consumo> => {
+    const res = await fetch(`${API_URL}/admin/consumos/${id}/lead`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al actualizar lead');
+    }
+    return res.json();
+};
+
+export const deleteConsumoLead = async (id: string): Promise<Consumo> => {
+    const res = await fetch(`${API_URL}/admin/consumos/${id}/lead`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al eliminar lead');
+    }
+    return res.json();
+};

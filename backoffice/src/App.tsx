@@ -14,6 +14,7 @@ import ExtensionChrome from './pages/ExtensionChrome';
 import ApiCredits from './pages/ApiCredits';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import CambiarPassword from './pages/CambiarPassword';
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -28,6 +29,7 @@ function App() {
         <BrowserRouter basename="/admin">
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/cambiar-password" element={<CambiarPassword />} />
             <Route path="/terminos" element={<Terms />} />
             <Route path="/privacidad" element={<Privacy />} />
 
@@ -53,6 +55,7 @@ function App() {
               <Route path="historial" element={<Historial />} />
               <Route path="extension" element={<ExtensionChrome />} />
               <Route path="api-credits" element={<ApiCredits />} />
+              <Route path="usuarios" element={<Usuarios />} />
             </Route>
           </Routes>
         </BrowserRouter>

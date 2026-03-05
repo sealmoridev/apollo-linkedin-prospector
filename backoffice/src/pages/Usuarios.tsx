@@ -4,6 +4,7 @@ import {
     changeAdminUserPassword, getEmpresas
 } from '../lib/api';
 import type { AdminUser, EmpresaDetail } from '../lib/api';
+import { useAuth } from '../AuthContext';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -29,10 +30,11 @@ interface CreateDialogProps {
     open: boolean;
     onOpenChange: (v: boolean) => void;
     empresas: EmpresaDetail[];
+    isSuperAdmin: boolean;
     onCreated: (u: AdminUser) => void;
 }
 
-function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogProps) {
+function CreateDialog({ open, onOpenChange, empresas, isSuperAdmin, onCreated }: CreateDialogProps) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState<'ADMIN' | 'SUPERADMIN'>('ADMIN');
@@ -44,7 +46,7 @@ function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogP
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (role === 'ADMIN' && !empresaId) {
+        if (isSuperAdmin && role === 'ADMIN' && !empresaId) {
             toast.error('Selecciona una empresa para el ADMIN');
             return;
         }
@@ -54,7 +56,7 @@ function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogP
                 email, password, role,
                 empresa_id: role === 'ADMIN' ? empresaId : undefined
             });
-            toast.success('Usuario creado');
+            toast.success('Usuario creado — deberá establecer su contraseña al primer inicio de sesión.');
             onCreated(created);
             reset();
             onOpenChange(false);
@@ -70,7 +72,11 @@ function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogP
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Nuevo usuario administrador</DialogTitle>
-                    <DialogDescription>Crea un ADMIN (empresa) o SUPERADMIN (global).</DialogDescription>
+                    <DialogDescription>
+                        {isSuperAdmin
+                            ? 'Crea un ADMIN (empresa) o SUPERADMIN (global).'
+                            : 'Crea un nuevo administrador para tu empresa.'}
+                    </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-2">
                     <div className="space-y-2">
@@ -78,7 +84,7 @@ function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogP
                         <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin@empresa.com" />
                     </div>
                     <div className="space-y-2">
-                        <Label>Contraseña</Label>
+                        <Label>Contraseña temporal</Label>
                         <div className="relative">
                             <Input
                                 type={showPwd ? 'text' : 'password'}
@@ -93,33 +99,38 @@ function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogP
                                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
                         </div>
+                        <p className="text-xs text-muted-foreground">El usuario deberá cambiarla en su primer inicio de sesión.</p>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Rol</Label>
-                        <Select value={role} onValueChange={v => setRole(v as 'ADMIN' | 'SUPERADMIN')}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="ADMIN">ADMIN (empresa)</SelectItem>
-                                <SelectItem value="SUPERADMIN">SUPERADMIN (global)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {role === 'ADMIN' && (
-                        <div className="space-y-2">
-                            <Label>Empresa</Label>
-                            <Select value={empresaId} onValueChange={setEmpresaId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona empresa..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {empresas.map(e => (
-                                        <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    {isSuperAdmin && (
+                        <>
+                            <div className="space-y-2">
+                                <Label>Rol</Label>
+                                <Select value={role} onValueChange={v => setRole(v as 'ADMIN' | 'SUPERADMIN')}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ADMIN">ADMIN (empresa)</SelectItem>
+                                        <SelectItem value="SUPERADMIN">SUPERADMIN (global)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {role === 'ADMIN' && (
+                                <div className="space-y-2">
+                                    <Label>Empresa</Label>
+                                    <Select value={empresaId} onValueChange={setEmpresaId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecciona empresa..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {empresas.map(e => (
+                                                <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        </>
                     )}
                     <DialogFooter>
                         <Button variant="outline" type="button" onClick={() => { reset(); onOpenChange(false); }}>
@@ -135,7 +146,7 @@ function CreateDialog({ open, onOpenChange, empresas, onCreated }: CreateDialogP
     );
 }
 
-// ─── Edit dialog ──────────────────────────────────────────────────────────────
+// ─── Edit dialog (SuperAdmin only) ────────────────────────────────────────────
 
 interface EditDialogProps {
     open: boolean;
@@ -313,6 +324,9 @@ function PasswordDialog({ open, onOpenChange, user, onChanged }: PasswordDialogP
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Usuarios() {
+    const { user: authUser } = useAuth();
+    const isSuperAdmin = authUser?.role === 'SUPERADMIN';
+
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [empresas, setEmpresas] = useState<EmpresaDetail[]>([]);
     const [loading, setLoading] = useState(true);
@@ -324,11 +338,14 @@ export default function Usuarios() {
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-        Promise.all([getAdminUsers(), getEmpresas()])
-            .then(([us, es]) => { setUsers(us); setEmpresas(es); })
+        const fetchAll = isSuperAdmin
+            ? Promise.all([getAdminUsers(), getEmpresas()]).then(([us, es]) => { setUsers(us); setEmpresas(es); })
+            : getAdminUsers().then(us => setUsers(us));
+
+        fetchAll
             .catch(() => toast.error('Error al cargar datos'))
             .finally(() => setLoading(false));
-    }, []);
+    }, [isSuperAdmin]);
 
     const handleCreated = (u: AdminUser) => setUsers(prev => [u, ...prev]);
 
@@ -362,8 +379,14 @@ export default function Usuarios() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold">Usuarios administradores</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">Gestiona quién tiene acceso al backoffice.</p>
+                    <h1 className="text-2xl font-bold">
+                        {isSuperAdmin ? 'Usuarios administradores' : 'Equipo'}
+                    </h1>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        {isSuperAdmin
+                            ? 'Gestiona quién tiene acceso al backoffice.'
+                            : 'Administradores con acceso al backoffice de tu empresa.'}
+                    </p>
                 </div>
                 <Button onClick={() => setCreateOpen(true)} className="gap-2">
                     <UserPlus className="h-4 w-4" />
@@ -374,7 +397,11 @@ export default function Usuarios() {
             <Card>
                 <CardHeader>
                     <CardTitle>Usuarios ({users.length})</CardTitle>
-                    <CardDescription>Todos los administradores registrados en el sistema.</CardDescription>
+                    <CardDescription>
+                        {isSuperAdmin
+                            ? 'Todos los administradores registrados en el sistema.'
+                            : 'Administradores de tu empresa.'}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {users.length === 0 ? (
@@ -387,7 +414,7 @@ export default function Usuarios() {
                                 <TableRow>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Rol</TableHead>
-                                    <TableHead>Empresa</TableHead>
+                                    {isSuperAdmin && <TableHead>Empresa</TableHead>}
                                     <TableHead>Creado</TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
@@ -401,27 +428,32 @@ export default function Usuarios() {
                                                 {u.role}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {u.empresa?.nombre ?? '—'}
-                                        </TableCell>
+                                        {isSuperAdmin && (
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {u.empresa?.nombre ?? '—'}
+                                            </TableCell>
+                                        )}
                                         <TableCell className="text-sm text-muted-foreground">
                                             {new Date(u.createdAt).toLocaleDateString('es-CL')}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
-                                                <Button
-                                                    variant="ghost" size="sm"
-                                                    className="h-8 w-8 p-0"
-                                                    title="Editar"
-                                                    onClick={() => setEditTarget(u)}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </Button>
+                                                {isSuperAdmin && (
+                                                    <Button
+                                                        variant="ghost" size="sm"
+                                                        className="h-8 w-8 p-0"
+                                                        title="Editar"
+                                                        onClick={() => setEditTarget(u)}
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="ghost" size="sm"
                                                     className="h-8 w-8 p-0"
                                                     title="Cambiar contraseña"
                                                     onClick={() => setPasswordTarget(u)}
+                                                    disabled={u.id === authUser?.id}
                                                 >
                                                     <KeyRound className="h-3.5 w-3.5" />
                                                 </Button>
@@ -430,6 +462,7 @@ export default function Usuarios() {
                                                     className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                                                     title="Eliminar"
                                                     onClick={() => setDeleteTarget(u)}
+                                                    disabled={u.id === authUser?.id}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </Button>
@@ -447,16 +480,19 @@ export default function Usuarios() {
                 open={createOpen}
                 onOpenChange={setCreateOpen}
                 empresas={empresas}
+                isSuperAdmin={isSuperAdmin}
                 onCreated={handleCreated}
             />
 
-            <EditDialog
-                open={editTarget !== null}
-                onOpenChange={v => { if (!v) setEditTarget(null); }}
-                user={editTarget}
-                empresas={empresas}
-                onSaved={handleSaved}
-            />
+            {isSuperAdmin && (
+                <EditDialog
+                    open={editTarget !== null}
+                    onOpenChange={v => { if (!v) setEditTarget(null); }}
+                    user={editTarget}
+                    empresas={empresas}
+                    onSaved={handleSaved}
+                />
+            )}
 
             <PasswordDialog
                 open={passwordTarget !== null}

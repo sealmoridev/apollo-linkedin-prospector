@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { requireAdmin, requireSuperAdmin, requireAdminOwner } from '../middlewares/admin-auth';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 const router = Router();
@@ -77,7 +78,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
         res.json({
             token,
-            user: { id: user.id, email: user.email, role: user.role, empresa_id: user.empresa_id }
+            user: { id: user.id, email: user.email, role: user.role, empresa_id: user.empresa_id },
+            mustChangePassword: user.must_change_password || false
         });
     } catch (error) {
         console.error('[Admin API] Login Error:', error);
@@ -92,6 +94,24 @@ router.post('/login', async (req: Request, res: Response) => {
 /** Perfil del admin actual */
 router.get('/me', requireAdmin, (req: Request, res: Response) => {
     res.json({ user: req.adminUser });
+});
+
+/** Cambiar contraseña propia (clears must_change_password) */
+router.post('/me/change-password', requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { newPassword } = req.body;
+        if (!newPassword || newPassword.length < 8) {
+            return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+        }
+        const password_hash = await bcrypt.hash(newPassword, 10);
+        await prisma.adminUser.update({
+            where: { id: req.adminUser!.id },
+            data: { password_hash, must_change_password: false }
+        });
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al cambiar contraseña' });
+    }
 });
 
 /**
@@ -513,10 +533,13 @@ router.patch('/empresas/:id/toggle-key', requireAdmin, requireAdminOwner('id'), 
 // GESTIÓN DE USUARIOS ADMIN
 // ============================================================================
 
-/** Listar todos los AdminUser (SuperAdmin only) */
-router.get('/users', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+/** Listar AdminUsers. SUPERADMIN: todos. ADMIN: solo los de su empresa. */
+router.get('/users', requireAdmin, async (req: Request, res: Response) => {
     try {
+        const { role, empresa_id } = req.adminUser!;
+        const where = role === 'SUPERADMIN' ? {} : { empresa_id: empresa_id || undefined };
         const users = await prisma.adminUser.findMany({
+            where,
             include: { empresa: { select: { id: true, nombre: true } } },
             orderBy: { createdAt: 'desc' }
         });
@@ -533,16 +556,25 @@ router.get('/users', requireAdmin, requireSuperAdmin, async (req: Request, res: 
     }
 });
 
-/** Crear Administrador de empresa o SuperAdmin */
-router.post('/users', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+/** Crear Administrador de empresa o SuperAdmin.
+ *  SUPERADMIN: puede crear cualquier rol.
+ *  ADMIN: solo puede crear otro ADMIN para su propia empresa. */
+router.post('/users', requireAdmin, async (req: Request, res: Response) => {
     try {
-        const { email, password, role, empresa_id } = req.body;
+        const { role: adminRole, empresa_id: adminEmpresaId } = req.adminUser!;
+        let { email, password, role, empresa_id } = req.body;
 
-        if (!email || !password || !role) {
-            return res.status(400).json({ error: 'Faltan parámetros: email, password, role' });
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Faltan parámetros: email, password' });
         }
 
-        if (role !== 'ADMIN' && role !== 'SUPERADMIN') {
+        // ADMIN can only create ADMIN users for their own empresa
+        if (adminRole !== 'SUPERADMIN') {
+            role = 'ADMIN';
+            empresa_id = adminEmpresaId;
+        }
+
+        if (!role || (role !== 'ADMIN' && role !== 'SUPERADMIN')) {
             return res.status(400).json({ error: 'Role inválido' });
         }
 
@@ -558,10 +590,11 @@ router.post('/users', requireAdmin, requireSuperAdmin, async (req: Request, res:
         const password_hash = await bcrypt.hash(password, 10);
 
         const user = await prisma.adminUser.create({
-            data: { email, password_hash, role, empresa_id: empresa_id || null }
+            data: { email, password_hash, role, empresa_id: empresa_id || null, must_change_password: true },
+            include: { empresa: { select: { id: true, nombre: true } } }
         });
 
-        res.json({ id: user.id, email: user.email, role: user.role, empresa_id: user.empresa_id });
+        res.json({ id: user.id, email: user.email, role: user.role, empresa_id: user.empresa_id, empresa: user.empresa, createdAt: user.createdAt });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al crear usuario administrador' });
@@ -600,11 +633,25 @@ router.put('/users/:id', requireAdmin, requireSuperAdmin, async (req: Request, r
     }
 });
 
-/** Eliminar AdminUser (no puede eliminarse a sí mismo) */
-router.delete('/users/:id', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+/** Eliminar AdminUser.
+ *  SUPERADMIN: puede eliminar cualquiera (excepto a sí mismo).
+ *  ADMIN: solo puede eliminar otros ADMIN de su empresa. */
+router.delete('/users/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
-        if (req.params.id === req.adminUser!.id) {
+        const { role, empresa_id, id: myId } = req.adminUser!;
+
+        if (req.params.id === myId) {
             return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+        }
+
+        if (role !== 'SUPERADMIN') {
+            const target = await prisma.adminUser.findUnique({ where: { id: req.params.id } });
+            if (!target || target.empresa_id !== empresa_id) {
+                return res.status(403).json({ error: 'No tienes permiso para eliminar este usuario' });
+            }
+            if (target.role === 'SUPERADMIN') {
+                return res.status(403).json({ error: 'No puedes eliminar un SuperAdmin' });
+            }
         }
 
         await prisma.adminUser.delete({ where: { id: req.params.id } });
@@ -615,13 +662,22 @@ router.delete('/users/:id', requireAdmin, requireSuperAdmin, async (req: Request
     }
 });
 
-/** Cambiar contraseña de un AdminUser */
-router.post('/users/:id/change-password', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+/** Cambiar contraseña de un AdminUser.
+ *  SUPERADMIN: cualquiera. ADMIN: solo usuarios de su empresa. */
+router.post('/users/:id/change-password', requireAdmin, async (req: Request, res: Response) => {
     try {
+        const { role, empresa_id } = req.adminUser!;
         const { newPassword } = req.body;
 
         if (!newPassword || newPassword.length < 8) {
             return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+        }
+
+        if (role !== 'SUPERADMIN') {
+            const target = await prisma.adminUser.findUnique({ where: { id: req.params.id } });
+            if (!target || target.empresa_id !== empresa_id) {
+                return res.status(403).json({ error: 'No tienes permiso' });
+            }
         }
 
         const password_hash = await bcrypt.hash(newPassword, 10);
@@ -635,6 +691,68 @@ router.post('/users/:id/change-password', requireAdmin, requireSuperAdmin, async
     } catch (error: any) {
         if (error.code === 'P2025') return res.status(404).json({ error: 'Usuario no encontrado' });
         res.status(500).json({ error: 'Error al cambiar contraseña' });
+    }
+});
+
+// ============================================================================
+// CRUD DE LEAD DATA EN CONSUMOS
+// ============================================================================
+
+const LEAD_EDITABLE_FIELDS = [
+    'full_name', 'first_name', 'last_name', 'title',
+    'primary_email', 'personal_email', 'phone_number',
+    'company_name', 'company_domain', 'industry', 'location'
+];
+
+/** Editar campos de lead_data. ADMIN: solo su empresa. SUPERADMIN: cualquiera. */
+router.put('/consumos/:id/lead', requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { role, empresa_id } = req.adminUser!;
+
+        const consumo = await prisma.consumo.findUnique({ where: { id: req.params.id } });
+        if (!consumo) return res.status(404).json({ error: 'Registro no encontrado' });
+        if (!consumo.lead_data) return res.status(400).json({ error: 'Este registro no tiene datos de lead' });
+
+        if (role !== 'SUPERADMIN' && consumo.empresa_id !== empresa_id) {
+            return res.status(403).json({ error: 'Sin permiso' });
+        }
+
+        const current = consumo.lead_data as Record<string, unknown>;
+        const updates: Record<string, string | null> = {};
+        for (const key of LEAD_EDITABLE_FIELDS) {
+            if (req.body[key] !== undefined) {
+                updates[key] = req.body[key] || null;
+            }
+        }
+
+        const merged = { ...current, ...updates } as unknown as Prisma.InputJsonValue;
+        const updated = await prisma.consumo.update({
+            where: { id: req.params.id },
+            data: { lead_data: merged }
+        });
+
+        res.json(updated);
+    } catch (error: any) {
+        if (error.code === 'P2025') return res.status(404).json({ error: 'Registro no encontrado' });
+        res.status(500).json({ error: 'Error al actualizar lead' });
+    }
+});
+
+/** Eliminar (nullear) lead_data — SuperAdmin only. */
+router.delete('/consumos/:id/lead', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+    try {
+        const consumo = await prisma.consumo.findUnique({ where: { id: req.params.id } });
+        if (!consumo) return res.status(404).json({ error: 'Registro no encontrado' });
+
+        const updated = await prisma.consumo.update({
+            where: { id: req.params.id },
+            data: { lead_data: Prisma.JsonNull }
+        });
+
+        res.json(updated);
+    } catch (error: any) {
+        if (error.code === 'P2025') return res.status(404).json({ error: 'Registro no encontrado' });
+        res.status(500).json({ error: 'Error al eliminar lead' });
     }
 });
 
