@@ -369,6 +369,52 @@ export const deleteAdminUser = async (id: string): Promise<void> => {
     }
 };
 
+// ==========================================
+// API CREDITS
+// ==========================================
+
+export interface ApiCreditsResult {
+    apollo: {
+        configured: boolean;
+        note: string;
+        db: { thisMonth: number; total: number; enrichmentsThisMonth: number };
+    };
+    prospeo: {
+        configured: boolean;
+        error?: string;
+        remaining_credits?: number;
+        used_credits?: number;
+        current_plan?: string;
+        next_quota_renewal_date?: string;
+    };
+    leadmagic: {
+        configured: boolean;
+        error?: string;
+        credits?: number;
+    };
+    findymail: {
+        configured: boolean;
+        error?: string;
+        [key: string]: unknown;
+    };
+    millionverifier: {
+        configured: boolean;
+        error?: string;
+        db: { thisMonth: number; total: number };
+        [key: string]: unknown;
+    };
+}
+
+export const getApiCredits = async (empresa_id?: string): Promise<ApiCreditsResult> => {
+    const qs = empresa_id ? `?empresa_id=${empresa_id}` : '';
+    const res = await fetch(`${API_URL}/admin/api-credits${qs}`, { headers: getAuthHeaders() });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al obtener créditos de API');
+    }
+    return res.json();
+};
+
 export const changeAdminUserPassword = async (id: string, newPassword: string): Promise<void> => {
     const res = await fetch(`${API_URL}/admin/users/${id}/change-password`, {
         method: 'POST',

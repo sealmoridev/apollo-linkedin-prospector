@@ -6,7 +6,7 @@ import { getEmpresas } from '../lib/api';
 import type { EmpresaDetail } from '../lib/api';
 import {
     Building2, LogOut, LayoutDashboard, PlugZap, History, Users,
-    ArrowLeft, ChevronLeft, ChevronRight, ArrowLeftRight, Globe, Loader2
+    ArrowLeft, ChevronLeft, ChevronRight, ArrowLeftRight, Globe, Loader2, CreditCard
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -62,6 +62,7 @@ export function Sidebar() {
                 { to: `${base}/historial`, label: 'Registros', Icon: History },
                 { to: `${base}/empresa`, label: 'Empresa', Icon: Building2 },
                 { to: `${base}/apis`, label: 'APIs', Icon: PlugZap },
+                { to: `${base}/api-credits`, label: 'Consumos', Icon: CreditCard },
                 { to: `${base}/extension`, label: 'Extensión Chrome', Icon: Globe },
             ];
         }
@@ -76,6 +77,7 @@ export function Sidebar() {
             { to: '/historial', label: 'Registros', Icon: History, exact: false },
             { to: '/empresa', label: 'Empresa', Icon: Building2, exact: false },
             { to: '/apis', label: 'APIs', Icon: PlugZap, exact: false },
+            { to: '/api-credits', label: 'Consumos', Icon: CreditCard, exact: false },
             { to: '/extension', label: 'Extensión Chrome', Icon: Globe, exact: false },
         ];
     })();

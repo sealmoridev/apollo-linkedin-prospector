@@ -610,4 +610,134 @@ router.post('/users/:id/change-password', requireAdmin, requireSuperAdmin, async
     }
 });
 
+// ============================================================================
+// CRÉDITOS DE API — consulta balance real de cada proveedor
+// ============================================================================
+
+/**
+ * GET /api/admin/api-credits?empresa_id=xxx
+ * Consulta el balance de créditos de cada proveedor configurado.
+ * ADMIN usa su propia empresa; SUPERADMIN debe pasar empresa_id.
+ */
+router.get('/api-credits', requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { role, empresa_id: adminEmpresaId } = req.adminUser!;
+        const targetId = role === 'SUPERADMIN' ? (req.query.empresa_id as string) : adminEmpresaId;
+
+        if (!targetId) {
+            return res.status(400).json({ error: 'Se requiere empresa_id' });
+        }
+
+        const empresa = await prisma.empresa.findUnique({ where: { id: targetId } });
+        if (!empresa) return res.status(404).json({ error: 'Empresa no encontrada' });
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        const safeGet = async (url: string, headers: Record<string, string>) => {
+            try {
+                const r = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+                const json = await r.json() as any;
+                return { ok: r.ok, data: json };
+            } catch (e: any) {
+                return { ok: false, data: null, error: e.message };
+            }
+        };
+
+        // ── Apollo: no expone balance vía API pública → usamos nuestra DB ───
+        const now = new Date();
+        const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const apolloMonth = await prisma.consumo.aggregate({
+            where: { empresa_id: targetId, creditos_apollo: { gt: 0 }, fecha: { gte: firstOfMonth } },
+            _sum: { creditos_apollo: true },
+            _count: { _all: true },
+        });
+        const apolloTotal = await prisma.consumo.aggregate({
+            where: { empresa_id: targetId, creditos_apollo: { gt: 0 } },
+            _sum: { creditos_apollo: true },
+        });
+
+        // ── Prospeo ──────────────────────────────────────────────────────────
+        let prospeoData: any = null;
+        if (empresa.prospeo_api_key) {
+            const r = await safeGet('https://api.prospeo.io/account-information', { 'X-KEY': empresa.prospeo_api_key });
+            if (r.ok && r.data?.response) prospeoData = r.data.response;
+            else prospeoData = { error: r.data?.message || 'Error al consultar Prospeo' };
+        }
+
+        // ── LeadMagic ────────────────────────────────────────────────────────
+        let leadmagicData: any = null;
+        if (empresa.leadmagic_api_key) {
+            const r = await safeGet('https://api.leadmagic.io/v1/credits', { 'X-API-Key': empresa.leadmagic_api_key });
+            if (r.ok) leadmagicData = r.data;
+            else leadmagicData = { error: r.data?.message || 'Error al consultar LeadMagic' };
+        }
+
+        // ── Findymail ────────────────────────────────────────────────────────
+        let findymailData: any = null;
+        if (empresa.findymail_api_key) {
+            const r = await safeGet('https://app.findymail.com/api/credits', {
+                'Authorization': `Bearer ${empresa.findymail_api_key}`,
+                'Content-Type': 'application/json',
+            });
+            if (r.ok) findymailData = r.data;
+            else findymailData = { error: r.data?.message || 'Error al consultar Findymail' };
+        }
+
+        // ── MillionVerifier ──────────────────────────────────────────────────
+        let millionData: any = null;
+        if (empresa.millionverifier_api_key) {
+            const r = await safeGet(
+                `https://api.millionverifier.com/api/v3/credits?api=${empresa.millionverifier_api_key}`,
+                { 'Content-Type': 'application/json' }
+            );
+            if (r.ok) millionData = r.data;
+            else millionData = { error: r.data?.message || 'Error al consultar MillionVerifier' };
+
+            // MillionVerifier también desde consumos DB
+        }
+        const millionMonthDB = await prisma.consumo.aggregate({
+            where: { empresa_id: targetId, creditos_verifier: { gt: 0 }, fecha: { gte: firstOfMonth } },
+            _sum: { creditos_verifier: true },
+        });
+        const millionTotalDB = await prisma.consumo.aggregate({
+            where: { empresa_id: targetId, creditos_verifier: { gt: 0 } },
+            _sum: { creditos_verifier: true },
+        });
+
+        res.json({
+            apollo: {
+                configured: !!empresa.apollo_api_key,
+                note: 'Apollo no expone balance vía API pública',
+                db: {
+                    thisMonth: apolloMonth._sum.creditos_apollo ?? 0,
+                    total: apolloTotal._sum.creditos_apollo ?? 0,
+                    enrichmentsThisMonth: apolloMonth._count._all,
+                },
+            },
+            prospeo: {
+                configured: !!empresa.prospeo_api_key,
+                ...(prospeoData ?? {}),
+            },
+            leadmagic: {
+                configured: !!empresa.leadmagic_api_key,
+                ...(leadmagicData ?? {}),
+            },
+            findymail: {
+                configured: !!empresa.findymail_api_key,
+                ...(findymailData ?? {}),
+            },
+            millionverifier: {
+                configured: !!empresa.millionverifier_api_key,
+                ...(millionData ?? {}),
+                db: {
+                    thisMonth: millionMonthDB._sum.creditos_verifier ?? 0,
+                    total: millionTotalDB._sum.creditos_verifier ?? 0,
+                },
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener créditos de API' });
+    }
+});
+
 export default router;

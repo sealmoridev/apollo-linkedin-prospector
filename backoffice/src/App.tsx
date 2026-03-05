@@ -11,6 +11,7 @@ import Apis from './pages/Apis';
 import Historial from './pages/Historial';
 import Usuarios from './pages/Usuarios';
 import ExtensionChrome from './pages/ExtensionChrome';
+import ApiCredits from './pages/ApiCredits';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
@@ -43,6 +44,7 @@ function App() {
               <Route path="empresas/:id/apis" element={<Apis />} />
               <Route path="empresas/:id/historial" element={<Historial />} />
               <Route path="empresas/:id/extension" element={<ExtensionChrome />} />
+              <Route path="empresas/:id/api-credits" element={<ApiCredits />} />
 
               {/* Admin Tenant */}
               <Route path="mi-empresa" element={<MiEmpresa />} />
@@ -50,6 +52,7 @@ function App() {
               <Route path="apis" element={<Apis />} />
               <Route path="historial" element={<Historial />} />
               <Route path="extension" element={<ExtensionChrome />} />
+              <Route path="api-credits" element={<ApiCredits />} />
             </Route>
           </Routes>
         </BrowserRouter>
