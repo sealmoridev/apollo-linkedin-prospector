@@ -200,7 +200,24 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
             }
         }
 
-        if (usuario_id) filter.usuario_id = usuario_id as string;
+        if (usuario_id) {
+            // A single SDR may have multiple ExtensionUser records (different generated IDs
+            // from reinstalls / other devices). Find all IDs sharing the same email so the
+            // filter returns all their consumos, not just the ones from the selected ID.
+            const targetUser = await prisma.extensionUser.findUnique({
+                where: { id: usuario_id as string },
+                select: { email: true, empresa_id: true }
+            });
+            if (targetUser) {
+                const siblings = await prisma.extensionUser.findMany({
+                    where: { email: targetUser.email, empresa_id: targetUser.empresa_id },
+                    select: { id: true }
+                });
+                filter.usuario_id = { in: siblings.map((u: { id: string }) => u.id) };
+            } else {
+                filter.usuario_id = usuario_id as string;
+            }
+        }
         if (sheet_name) filter.sheet_name = sheet_name as string;
         if (only_leads === 'true') filter.lead_data = { not: null };
 
@@ -441,7 +458,18 @@ router.get('/empresas/:id/usuarios', requireAdmin, requireAdminOwner('id'), asyn
             orderBy: { createdAt: 'desc' }
         });
 
-        res.json(usuarios);
+        // Deduplicate by email: the same SDR may have multiple records
+        // (reinstalled extension, different devices, cleared Chrome storage).
+        // Keep the most recent record per email.
+        const seen = new Set<string>();
+        const uniqueUsuarios = usuarios.filter(u => {
+            const key = u.email;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        res.json(uniqueUsuarios);
     } catch (error) {
         res.status(500).json({ error: 'Error al listar usuarios' });
     }
