@@ -13,10 +13,8 @@ import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
     CartesianGrid, Tooltip
 } from 'recharts';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../components/ui/sheet';
-import { Separator } from '../components/ui/separator';
-import type { LeadData } from '../lib/api';
-import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight, ExternalLink } from 'lucide-react';
+import { LeadDetailSheet } from '../components/LeadDetailSheet';
+import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -87,7 +85,7 @@ export default function MiEmpresa() {
     // Últimas capturas (preview)
     const [lastCaptures, setLastCaptures] = useState<Consumo[]>([]);
     const [loadingCaptures, setLoadingCaptures] = useState(false);
-    const [capturePanel, setCapturePanel] = useState<{ lead: LeadData; sheet_name: string | null } | null>(null);
+    const [capturePanel, setCapturePanel] = useState<Consumo | null>(null);
 
     // Date range
     const [preset, setPreset] = useState<RangePreset>('7d');
@@ -233,26 +231,27 @@ export default function MiEmpresa() {
         }));
     }, [consumos, appliedRange, sesionBreakdownMap]);
 
-    // Ranking SDR: agrupa por email para unificar IDs distintos del mismo SDR
+    // Ranking SDR: agrupa por email para unificar IDs distintos del mismo SDR.
+    // Solo cuenta créditos de capturas (lead_data != null) para evitar doble conteo.
     const sdrRanking = useMemo(() => {
-        // email → primer usuario que tenga ese email (para avatar/nombre)
         const emailToUser = new Map(usuarios.map(u => [u.email, u]));
         const byEmail = new Map<string, { email: string; extracciones: number; mail: number; phone: number; verif: number }>();
-        consumos.forEach(c => {
+        consumos.filter(c => c.lead_data != null).forEach(c => {
             const email = c.usuario?.email
                 ?? usuarios.find(u => u.id === c.usuario_id)?.email
                 ?? c.usuario_id;
             const prev = byEmail.get(email) || { email, extracciones: 0, mail: 0, phone: 0, verif: 0 };
-            // Solo capturas cuentan como extracción
-            if (c.lead_data != null) prev.extracciones += 1;
+            prev.extracciones += 1;
             if (c.credit_breakdown != null) {
-                prev.mail += c.credit_breakdown.email_credits;
-                prev.phone += c.credit_breakdown.phone_credits;
-                prev.verif += c.credit_breakdown.verification_credits;
+                const bd = c.credit_breakdown;
+                prev.mail += bd.email_credits;
+                prev.phone += bd.phone_credits;
+                // Fallback to sesion_verifier when old extension sent verifierCalled=false
+                prev.verif += bd.verification_credits > 0 ? bd.verification_credits : (c.sesion_verifier ?? 0);
             } else {
-                const bd = c.sesion_id ? sesionBreakdownMap.get(c.sesion_id) : undefined;
-                if (!bd || bd.email === 0) prev.mail += c.creditos_apollo;
-                if (!bd || bd.verif === 0) prev.verif += c.creditos_verifier;
+                // Old system: use session totals stored on the capture
+                prev.mail += c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
+                prev.verif += c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier;
             }
             byEmail.set(email, prev);
         });
@@ -263,7 +262,7 @@ export default function MiEmpresa() {
         return Array.from(byEmail.values())
             .sort((a, b) => b.extracciones - a.extracciones)
             .map(r => ({ ...r, sdr: emailToUser.get(r.email) }));
-    }, [consumos, usuarios, sesionBreakdownMap]);
+    }, [consumos, usuarios]);
 
     const registrosRoute = empresaId ? `/empresas/${empresaId}/historial` : '/historial';
 
@@ -523,7 +522,7 @@ export default function MiEmpresa() {
                                         const sdr = usuarios.find(u => u.id === c.usuario_id);
                                         const sdrLabel = sdr?.nombre || sdr?.email || c.usuario?.email || '—';
                                         return (
-                                            <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setCapturePanel({ lead: ld, sheet_name: c.sheet_name })}>
+                                            <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setCapturePanel(c)}>
                                                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                                     {new Date(c.fecha).toLocaleDateString('es-CL')}
                                                 </TableCell>
@@ -559,83 +558,25 @@ export default function MiEmpresa() {
                 </CardContent>
             </Card>
 
-            {/* Panel lateral de detalle de captura */}
-            <Sheet open={!!capturePanel} onOpenChange={open => { if (!open) setCapturePanel(null); }}>
-                <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
-                    {capturePanel && (() => {
-                        const ld = capturePanel.lead;
-                        const statusMap: Record<string, string> = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
-                        const statusLabel = ld.email_status ? (statusMap[ld.email_status] || ld.email_status) : 'Sin verificar';
-                        const statusVariant = ld.email_status === 'valid' ? 'default' : ld.email_status === 'invalid' ? 'destructive' : 'secondary';
-                        return (
-                            <>
-                                <SheetHeader>
-                                    <SheetTitle>{ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || 'Prospecto'}</SheetTitle>
-                                    <SheetDescription className="flex flex-wrap gap-1.5 items-center">
-                                        {ld.title && <span>{ld.title}</span>}
-                                        {ld.company_name && <span>· {ld.company_name}</span>}
-                                    </SheetDescription>
-                                </SheetHeader>
-                                <div className="px-6 pb-6 space-y-4">
-                                    <Separator />
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contacto</p>
-                                        <dl className="space-y-1.5 text-sm">
-                                            {ld.primary_email && (
-                                                <div className="flex gap-2 items-start">
-                                                    <dt className="text-muted-foreground w-28 shrink-0">Email principal</dt>
-                                                    <dd className="flex items-center gap-2 flex-wrap">
-                                                        <span className="font-medium break-all">{ld.primary_email}</span>
-                                                        <Badge variant={statusVariant as any} className="text-[10px] shrink-0">{statusLabel}</Badge>
-                                                    </dd>
-                                                </div>
-                                            )}
-                                            {ld.personal_email && ld.personal_email !== ld.primary_email && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email personal</dt><dd className="break-all">{ld.personal_email}</dd></div>}
-                                            {ld.phone_number && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Teléfono</dt><dd>{ld.phone_number}</dd></div>}
-                                        </dl>
-                                    </div>
-                                    <Separator />
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</p>
-                                        <dl className="space-y-1.5 text-sm">
-                                            {ld.company_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{ld.company_name}</dd></div>}
-                                            {ld.company_domain && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Dominio</dt><dd>{ld.company_domain}</dd></div>}
-                                            {ld.industry && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Industria</dt><dd>{ld.industry}</dd></div>}
-                                            {ld.location && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Ubicación</dt><dd>{ld.location}</dd></div>}
-                                        </dl>
-                                    </div>
-                                    {ld.linkedin_url && (
-                                        <>
-                                            <Separator />
-                                            <a href={ld.linkedin_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:underline">
-                                                <ExternalLink className="h-3.5 w-3.5" />Ver perfil LinkedIn
-                                            </a>
-                                        </>
-                                    )}
-                                    <Separator />
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SDR</p>
-                                        <dl className="space-y-1.5 text-sm">
-                                            {ld.sdr_name && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Nombre</dt><dd className="font-medium">{ld.sdr_name}</dd></div>}
-                                            {ld.sdr_mail && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Email</dt><dd className="break-all">{ld.sdr_mail}</dd></div>}
-                                            {ld.created_at && <div className="flex gap-2"><dt className="text-muted-foreground w-28 shrink-0">Capturado</dt><dd>{new Date(ld.created_at).toLocaleString('es-CL')}</dd></div>}
-                                        </dl>
-                                    </div>
-                                    {capturePanel.sheet_name && (
-                                        <>
-                                            <Separator />
-                                            <div className="space-y-2">
-                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sheet</p>
-                                                <p className="text-sm">{capturePanel.sheet_name}</p>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </>
-                        );
-                    })()}
-                </SheetContent>
-            </Sheet>
+            <LeadDetailSheet
+                consumo={capturePanel}
+                onClose={() => setCapturePanel(null)}
+                onLeadUpdated={(consumoId, newLead) => {
+                    setLastCaptures(prev => prev.map(c =>
+                        c.id === consumoId ? { ...c, lead_data: newLead } : c
+                    ));
+                    setCapturePanel(prev => prev && prev.id === consumoId
+                        ? { ...prev, lead_data: newLead }
+                        : prev
+                    );
+                }}
+                onLeadDeleted={(consumoId) => {
+                    setLastCaptures(prev => prev.map(c =>
+                        c.id === consumoId ? { ...c, lead_data: null } : c
+                    ));
+                    setCapturePanel(null);
+                }}
+            />
         </div>
     );
 }
