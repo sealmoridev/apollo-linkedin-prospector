@@ -14,7 +14,7 @@ import {
     CartesianGrid, Tooltip
 } from 'recharts';
 import { LeadDetailSheet } from '../components/LeadDetailSheet';
-import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight } from 'lucide-react';
+import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -68,6 +68,40 @@ function ChartTooltip({ active, payload, label }: any) {
     );
 }
 
+// ─── SDR Sparkline ────────────────────────────────────────────────────────────
+
+function buildSparkData(dates: Date[]): { h: number; v: number }[] {
+    if (dates.length === 0) return [];
+    const hours = dates.map(d => d.getHours());
+    const minH = Math.min(...hours);
+    const maxH = Math.max(...hours);
+    const result: { h: number; v: number }[] = [];
+    for (let h = minH; h <= maxH; h++) {
+        result.push({ h, v: hours.filter(hh => hh === h).length });
+    }
+    return result;
+}
+
+function Sparkline({ data, id }: { data: { h: number; v: number }[]; id: string }) {
+    return (
+        <ResponsiveContainer width={160} height={36}>
+            <AreaChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                <defs>
+                    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <Area
+                    type="monotone" dataKey="v"
+                    stroke="hsl(var(--primary))" strokeWidth={1.5}
+                    fill={`url(#${id})`} dot={false} isAnimationActive={false}
+                />
+            </AreaChart>
+        </ResponsiveContainer>
+    );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MiEmpresa() {
@@ -86,6 +120,11 @@ export default function MiEmpresa() {
     const [lastCaptures, setLastCaptures] = useState<Consumo[]>([]);
     const [loadingCaptures, setLoadingCaptures] = useState(false);
     const [capturePanel, setCapturePanel] = useState<Consumo | null>(null);
+
+    // Ranking SDR — fecha independiente del filtro del dashboard
+    const [rankingDate, setRankingDate] = useState(() => toISO(new Date()));
+    const [rankingCaptures, setRankingCaptures] = useState<Consumo[]>([]);
+    const [loadingRanking, setLoadingRanking] = useState(false);
 
     // Date range
     const [preset, setPreset] = useState<RangePreset>('7d');
@@ -140,6 +179,16 @@ export default function MiEmpresa() {
             .finally(() => setLoadingCaptures(false));
     }, [empresa]);
 
+    // Fetch ranking captures for the selected day (independent of dashboard range)
+    useEffect(() => {
+        if (!empresa) return;
+        setLoadingRanking(true);
+        getConsumos(empresa.id, rankingDate, rankingDate)
+            .then(cs => setRankingCaptures(cs.filter(c => c.lead_data != null)))
+            .catch(() => {})
+            .finally(() => setLoadingRanking(false));
+    }, [empresa, rankingDate]);
+
     const applyPreset = (p: Exclude<RangePreset, 'custom'>) => {
         setPreset(p);
         setAppliedRange(presetRange(p));
@@ -158,6 +207,13 @@ export default function MiEmpresa() {
         if (!customDesde || !customHasta) return;
         if (customDesde > customHasta) { toast.error('La fecha "desde" debe ser anterior a "hasta"'); return; }
         setAppliedRange({ desde: customDesde, hasta: customHasta });
+    };
+
+    const shiftRankingDate = (days: number) => {
+        const d = new Date(rankingDate + 'T00:00:00');
+        d.setDate(d.getDate() + days);
+        const next = toISO(d);
+        if (next <= toISO(new Date())) setRankingDate(next);
     };
 
     // ─ Derived data ──────────────────────────────────────────────────────────
@@ -231,38 +287,41 @@ export default function MiEmpresa() {
         }));
     }, [consumos, appliedRange, sesionBreakdownMap]);
 
-    // Ranking SDR: agrupa por email para unificar IDs distintos del mismo SDR.
-    // Solo cuenta créditos de capturas (lead_data != null) para evitar doble conteo.
+    // Ranking SDR: basado en rankingDate (independiente del filtro del dashboard).
+    // Muestra extracciones del día con primera/última captura y sparkline horario.
     const sdrRanking = useMemo(() => {
         const emailToUser = new Map(usuarios.map(u => [u.email, u]));
-        const byEmail = new Map<string, { email: string; extracciones: number; mail: number; phone: number; verif: number }>();
-        consumos.filter(c => c.lead_data != null).forEach(c => {
+        const byEmail = new Map<string, { email: string; extracciones: number; dates: Date[] }>();
+
+        rankingCaptures.forEach(c => {
             const email = c.usuario?.email
                 ?? usuarios.find(u => u.id === c.usuario_id)?.email
                 ?? c.usuario_id;
-            const prev = byEmail.get(email) || { email, extracciones: 0, mail: 0, phone: 0, verif: 0 };
-            prev.extracciones += 1;
-            if (c.credit_breakdown != null) {
-                const bd = c.credit_breakdown;
-                prev.mail += bd.email_credits;
-                prev.phone += bd.phone_credits;
-                // Fallback to sesion_verifier when old extension sent verifierCalled=false
-                prev.verif += bd.verification_credits > 0 ? bd.verification_credits : (c.sesion_verifier ?? 0);
-            } else {
-                // Old system: use session totals stored on the capture
-                prev.mail += c.sesion_apollo !== null ? c.sesion_apollo : c.creditos_apollo;
-                prev.verif += c.sesion_verifier !== null ? c.sesion_verifier : c.creditos_verifier;
-            }
-            byEmail.set(email, prev);
+            const entry = byEmail.get(email) || { email, extracciones: 0, dates: [] };
+            entry.extracciones += 1;
+            entry.dates.push(new Date(c.fecha));
+            byEmail.set(email, entry);
         });
-        // Incluir SDRs registrados sin actividad en el período
+
+        // Incluir SDRs registrados sin actividad en el día
         usuarios.forEach(u => {
-            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, mail: 0, phone: 0, verif: 0 });
+            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, dates: [] });
         });
+
         return Array.from(byEmail.values())
             .sort((a, b) => b.extracciones - a.extracciones)
-            .map(r => ({ ...r, sdr: emailToUser.get(r.email) }));
-    }, [consumos, usuarios]);
+            .map(r => {
+                const sorted = [...r.dates].sort((a, b) => a.getTime() - b.getTime());
+                return {
+                    email: r.email,
+                    extracciones: r.extracciones,
+                    first: sorted[0] ?? null,
+                    last: sorted[sorted.length - 1] ?? null,
+                    sparkData: buildSparkData(r.dates),
+                    sdr: emailToUser.get(r.email),
+                };
+            });
+    }, [rankingCaptures, usuarios]);
 
     const registrosRoute = empresaId ? `/empresas/${empresaId}/historial` : '/historial';
 
@@ -416,16 +475,45 @@ export default function MiEmpresa() {
                 </CardContent>
             </Card>
 
-            {/* SDR Ranking — fusiona actividad + perfil */}
+            {/* SDR Ranking — fecha propia con sparkline horario */}
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
                     <div>
                         <CardTitle>Ranking de SDRs</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">{usuarios.length} registrados · ordenados por extracciones en el período</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {sdrRanking.filter(r => r.extracciones > 0).length} activos de {usuarios.length} registrados
+                        </p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={refreshUsuarios} disabled={refreshingUsuarios} className="h-8 w-8 p-0">
-                        <RefreshCw className={`h-4 w-4 ${refreshingUsuarios ? 'animate-spin' : ''}`} />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => shiftRankingDate(-1)}>
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                        </Button>
+                        <Input
+                            type="date"
+                            className="h-7 w-36 text-xs px-2"
+                            value={rankingDate}
+                            max={toISO(new Date())}
+                            onChange={e => {
+                                if (e.target.value && e.target.value <= toISO(new Date())) setRankingDate(e.target.value);
+                            }}
+                        />
+                        <Button
+                            variant="ghost" size="sm" className="h-7 w-7 p-0"
+                            disabled={rankingDate >= toISO(new Date())}
+                            onClick={() => shiftRankingDate(1)}
+                        >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                        {rankingDate < toISO(new Date()) && (
+                            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setRankingDate(toISO(new Date()))}>
+                                Hoy
+                            </Button>
+                        )}
+                        {loadingRanking && <span className="text-xs text-muted-foreground animate-pulse px-1">...</span>}
+                        <Button variant="ghost" size="sm" onClick={refreshUsuarios} disabled={refreshingUsuarios} className="h-7 w-7 p-0 ml-0.5">
+                            <RefreshCw className={`h-3.5 w-3.5 ${refreshingUsuarios ? 'animate-spin' : ''}`} />
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {sdrRanking.length === 0 ? (
@@ -434,13 +522,12 @@ export default function MiEmpresa() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>#</TableHead>
+                                    <TableHead className="w-8">#</TableHead>
                                     <TableHead>SDR</TableHead>
-                                    <TableHead className="text-right">Extracciones</TableHead>
-                                    <TableHead className="text-right">Mail</TableHead>
-                                    <TableHead className="text-right">Tel.</TableHead>
-                                    <TableHead className="text-right">Verif.</TableHead>
-                                    <TableHead className="text-right">Desde</TableHead>
+                                    <TableHead className="text-right">Extr.</TableHead>
+                                    <TableHead className="text-right">Inicio</TableHead>
+                                    <TableHead className="text-right">Fin</TableHead>
+                                    <TableHead className="min-w-[160px]">Tendencia</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -450,7 +537,7 @@ export default function MiEmpresa() {
                                     const displayEmail = u?.nombre ? r.email : undefined;
                                     return (
                                         <TableRow key={r.email}>
-                                            <TableCell className="text-muted-foreground font-medium w-8">
+                                            <TableCell className="text-muted-foreground font-medium">
                                                 {i + 1}
                                             </TableCell>
                                             <TableCell>
@@ -470,11 +557,17 @@ export default function MiEmpresa() {
                                             <TableCell className="text-right">
                                                 <Badge variant={r.extracciones > 0 ? 'secondary' : 'outline'}>{r.extracciones}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-right text-sm">{r.mail || '—'}</TableCell>
-                                            <TableCell className="text-right text-sm">{r.phone || '—'}</TableCell>
-                                            <TableCell className="text-right text-sm">{r.verif || '—'}</TableCell>
-                                            <TableCell className="text-right text-sm text-muted-foreground">
-                                                {u?.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : '—'}
+                                            <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                                                {r.first ? r.first.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                                                {r.last ? r.last.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {r.sparkData.length > 0
+                                                    ? <Sparkline data={r.sparkData} id={`spark-${i}`} />
+                                                    : <span className="text-muted-foreground text-sm">—</span>
+                                                }
                                             </TableCell>
                                         </TableRow>
                                     );
