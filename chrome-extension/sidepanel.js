@@ -167,6 +167,38 @@ const getProviderIconUrl = (providerId) => {
         resultDiv.textContent = '';
     };
 
+    // ── Confirmation dialog for saving with invalid email ────────────────────
+    // Returns a Promise<boolean>: true = confirmed, false = cancelled
+
+    const showInvalidEmailConfirm = () => new Promise((resolve) => {
+        saveBtn.style.display = 'none';
+        cancelBtn.disabled = true;
+
+        const confirmDiv = document.createElement('div');
+        confirmDiv.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:10px 12px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px;';
+        confirmDiv.innerHTML = `
+            <p style="font-size:11px; color:#f87171; margin:0; line-height:1.5;">
+                <strong>⚠️ El email fue verificado como inválido.</strong><br>¿Deseas guardarlo de todas formas?
+            </p>
+            <div style="display:flex; gap:6px;">
+                <button id="apConfirmNo"  style="flex:1; padding:5px 0; font-size:11px; border:1px solid rgba(255,255,255,0.15); border-radius:6px; background:transparent; cursor:pointer; color:#94a3b8;">No, cancelar</button>
+                <button id="apConfirmYes" style="flex:1; padding:5px 0; font-size:11px; border:none; border-radius:6px; background:#ef4444; color:#fff; cursor:pointer; font-weight:600;">Guardar igual</button>
+            </div>
+        `;
+
+        saveBtn.parentElement.insertBefore(confirmDiv, saveBtn);
+
+        const cleanup = (result) => {
+            confirmDiv.remove();
+            saveBtn.style.display = '';
+            cancelBtn.disabled = false;
+            resolve(result);
+        };
+
+        document.getElementById('apConfirmNo').addEventListener('click',  () => cleanup(false));
+        document.getElementById('apConfirmYes').addEventListener('click', () => cleanup(true));
+    });
+
     // ── Cascade enrichment ───────────────────────────────────────────────────
 
     const loadTenantProviders = async () => {
@@ -341,6 +373,9 @@ const getProviderIconUrl = (providerId) => {
                         validateBtn.disabled = false;
                         validateBtn.innerHTML = '<svg style="width:12px; height:12px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> Validar';
                     }
+                    // Reset previous verification badge so user knows this is a fresh email
+                    if (emailBadge) { emailBadge.style.display = 'none'; emailBadge.className = 'ap-badge'; }
+                    extractedLeadData.emailStatus = null;
                 } else {
                     extractedLeadData.phoneNumber = data.value;
                     if (valueEl) valueEl.textContent = data.value;
@@ -871,6 +906,18 @@ const getProviderIconUrl = (providerId) => {
                 } else if (data.status === 'invalid') {
                     emailBadge.className = 'ap-badge ap-badge-invalid';
                     emailBadge.innerHTML = '<svg style="width:12px; height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Inválido';
+                    // Mark the provider that found this email as tried, then offer cascade alternatives
+                    const emailFoundByProvider = (() => {
+                        const w = cascadeResults.email.find(r => r.found);
+                        return w ? w.providerId : currentEnrichmentProvider;
+                    })();
+                    triedProviders.email.add(emailFoundByProvider);
+                    const cascadeEl = document.getElementById('apCascadeEmail');
+                    if (cascadeEl) {
+                        cascadeEl.style.display = 'block';
+                        renderCascadeBadges('email');
+                        renderCascadeButtons('email');
+                    }
                 } else if (data.status === 'catch_all') {
                     emailBadge.className = 'ap-badge ap-badge-catchall';
                     emailBadge.innerHTML = '<svg style="width:12px; height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg> Catch-All';
@@ -952,6 +999,21 @@ const getProviderIconUrl = (providerId) => {
         saveLoader.style.display = 'inline-block';
         cancelBtn.disabled = true;
         clearMessage();
+
+        // If email is verified invalid, ask for explicit confirmation before saving
+        if (extractedLeadData.emailStatus === 'invalid') {
+            saveBtn.disabled = false;
+            saveBtnText.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; gap:6px;"><svg style="width:16px; height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Confirmar y Guardar</div>';
+            saveLoader.style.display = 'none';
+            cancelBtn.disabled = false;
+            const confirmed = await showInvalidEmailConfirm();
+            if (!confirmed) return;
+            // Re-lock while saving
+            saveBtn.disabled = true;
+            saveBtnText.textContent = 'Guardando...';
+            saveLoader.style.display = 'inline-block';
+            cancelBtn.disabled = true;
+        }
 
         try {
             // Determine which provider actually found each field
