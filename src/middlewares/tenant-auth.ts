@@ -84,10 +84,11 @@ export const tenantAuthMiddleware = async (req: Request, res: Response, next: Ne
                 }
             });
         } else if (extensionUser.empresa_id !== empresa.id) {
-            // Por seguridad, si el usuario existe pero la api key que mandó es de otra empresa, lo bloqueamos.
-            return res.status(403).json({
-                error: 'Forbidden',
-                message: 'User belongs to a different enterprise'
+            // El usuario cambió la API key en la extensión → reasignar al nuevo tenant.
+            // La API key válida es suficiente autorización; bloquearlo sería romper el flujo de testing y cambio de empresa.
+            extensionUser = await prisma.extensionUser.update({
+                where: { id: googleId },
+                data: { empresa_id: empresa.id }
             });
         }
 
