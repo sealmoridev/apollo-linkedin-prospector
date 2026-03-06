@@ -14,11 +14,11 @@ import {
     CartesianGrid, Tooltip
 } from 'recharts';
 import { LeadDetailSheet } from '../components/LeadDetailSheet';
-import { Users, Zap, CheckCircle, Activity, RefreshCw, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Zap, CheckCircle, Activity, RefreshCw, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
-type RangePreset = '7d' | '30d' | '3m' | 'custom';
+type RangePreset = 'hoy' | '7d' | '30d' | '3m' | 'custom';
 
 function toISO(d: Date) {
     return d.toISOString().slice(0, 10);
@@ -29,7 +29,8 @@ function presetRange(preset: Exclude<RangePreset, 'custom'>): { desde: string; h
     const desde = new Date();
     if (preset === '7d') desde.setDate(desde.getDate() - 6);
     else if (preset === '30d') desde.setDate(desde.getDate() - 29);
-    else desde.setMonth(desde.getMonth() - 3);
+    else if (preset === '3m') desde.setMonth(desde.getMonth() - 3);
+    // 'hoy': desde = hasta = today
     desde.setHours(0, 0, 0, 0);
     return { desde: toISO(desde), hasta: toISO(hasta) };
 }
@@ -39,6 +40,10 @@ function formatAxisDate(iso: string) {
     const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun',
                         'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
     return `${parseInt(d)} ${monthNames[parseInt(m) - 1]}`;
+}
+
+function formatAxisHour(hhmm: string) {
+    return `${parseInt(hhmm)}h`;
 }
 
 function fillDateRange(desde: string, hasta: string) {
@@ -56,9 +61,12 @@ function fillDateRange(desde: string, hasta: string) {
 
 function ChartTooltip({ active, payload, label }: any) {
     if (!active || !payload?.length) return null;
+    // Label is either an ISO date ("2026-03-05") or an hour string ("09:00")
+    const isHour = /^\d{2}:\d{2}$/.test(label ?? '');
+    const displayLabel = isHour ? label : (label ? formatAxisDate(label) : '');
     return (
         <div className="rounded-lg border bg-background px-3 py-2 shadow-md text-sm">
-            <p className="font-medium mb-1">{label ? formatAxisDate(label) : ''}</p>
+            <p className="font-medium mb-1">{displayLabel}</p>
             {payload.map((p: any) => (
                 <p key={p.dataKey} style={{ color: p.color }} className="text-xs">
                     {p.name}: <strong>{p.value}</strong>
@@ -84,14 +92,22 @@ function buildSparkData(dates: Date[]): { h: number; v: number }[] {
 
 function Sparkline({ data, id }: { data: { h: number; v: number }[]; id: string }) {
     return (
-        <ResponsiveContainer width={160} height={36}>
-            <AreaChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+        <ResponsiveContainer width="100%" height={52}>
+            <AreaChart data={data} margin={{ top: 2, right: 4, bottom: 0, left: 4 }}>
                 <defs>
                     <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
                         <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                     </linearGradient>
                 </defs>
+                <XAxis
+                    dataKey="h"
+                    tickFormatter={h => `${h}h`}
+                    tick={{ fontSize: 8, fill: 'hsl(var(--muted-foreground))' }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval="preserveStartEnd"
+                />
                 <Area
                     type="monotone" dataKey="v"
                     stroke="hsl(var(--primary))" strokeWidth={1.5}
@@ -127,10 +143,10 @@ export default function MiEmpresa() {
     const [loadingRanking, setLoadingRanking] = useState(false);
 
     // Date range
-    const [preset, setPreset] = useState<RangePreset>('7d');
+    const [preset, setPreset] = useState<RangePreset>('hoy');
     const [customDesde, setCustomDesde] = useState(toISO(new Date()));
     const [customHasta, setCustomHasta] = useState(toISO(new Date()));
-    const [appliedRange, setAppliedRange] = useState(() => presetRange('7d'));
+    const [appliedRange, setAppliedRange] = useState(() => presetRange('hoy'));
 
     // Clear empresa context on unmount
     useEffect(() => {
@@ -262,16 +278,35 @@ export default function MiEmpresa() {
         return s + c.creditos_verifier;
     }, 0), [consumos, sesionBreakdownMap]);
 
-    const sdrsActivos = useMemo(() => new Set(consumos.filter(c => c.lead_data != null).map(c => c.usuario?.email ?? c.usuario_id)).size, [consumos]);
 
     const chartData = useMemo(() => {
+        if (preset === 'hoy') {
+            // Agrupación horaria — rango dinámico desde primera hasta última extracción
+            const byHour = new Map<number, number>();
+            consumos.filter(c => c.lead_data != null).forEach(c => {
+                const h = new Date(c.fecha).getHours();
+                byHour.set(h, (byHour.get(h) ?? 0) + 1);
+            });
+            if (byHour.size === 0) return [];
+            const hours = Array.from(byHour.keys());
+            const minH = Math.min(...hours);
+            const maxH = Math.max(...hours);
+            return Array.from({ length: maxH - minH + 1 }, (_, i) => {
+                const h = minH + i;
+                return {
+                    date: `${h.toString().padStart(2, '0')}:00`,
+                    extracciones: byHour.get(h) ?? 0,
+                    apollo: 0,
+                };
+            });
+        }
+
+        // Agrupación diaria para rangos multi-día
         const byDate = new Map<string, { date: string; extracciones: number; apollo: number }>();
         consumos.forEach(c => {
             const date = new Date(c.fecha).toLocaleDateString('sv');
             const prev = byDate.get(date) || { date, extracciones: 0, apollo: 0 };
-            // Solo capturas en extracciones del chart
             if (c.lead_data != null) prev.extracciones += 1;
-            // Créditos: misma lógica anti-doble-conteo
             if (c.credit_breakdown != null) {
                 prev.apollo += c.credit_breakdown.email_credits + c.credit_breakdown.phone_credits;
             } else {
@@ -283,29 +318,31 @@ export default function MiEmpresa() {
         return fillDateRange(appliedRange.desde, appliedRange.hasta).map(date => ({
             date,
             extracciones: byDate.get(date)?.extracciones ?? 0,
-            apollo: byDate.get(date)?.apollo ?? 0
+            apollo: byDate.get(date)?.apollo ?? 0,
         }));
-    }, [consumos, appliedRange, sesionBreakdownMap]);
+    }, [consumos, appliedRange, sesionBreakdownMap, preset]);
 
     // Ranking SDR: basado en rankingDate (independiente del filtro del dashboard).
-    // Muestra extracciones del día con primera/última captura y sparkline horario.
+    // Muestra extracciones del día con primera/última captura, sparkline horario y sheets trabajados.
     const sdrRanking = useMemo(() => {
         const emailToUser = new Map(usuarios.map(u => [u.email, u]));
-        const byEmail = new Map<string, { email: string; extracciones: number; dates: Date[] }>();
+        const byEmail = new Map<string, { email: string; extracciones: number; dates: Date[]; sheets: Map<string, number> }>();
 
         rankingCaptures.forEach(c => {
             const email = c.usuario?.email
                 ?? usuarios.find(u => u.id === c.usuario_id)?.email
                 ?? c.usuario_id;
-            const entry = byEmail.get(email) || { email, extracciones: 0, dates: [] };
+            const entry = byEmail.get(email) || { email, extracciones: 0, dates: [] as Date[], sheets: new Map<string, number>() };
             entry.extracciones += 1;
             entry.dates.push(new Date(c.fecha));
+            const sheetKey = c.sheet_name || 'Sin hoja';
+            entry.sheets.set(sheetKey, (entry.sheets.get(sheetKey) ?? 0) + 1);
             byEmail.set(email, entry);
         });
 
         // Incluir SDRs registrados sin actividad en el día
         usuarios.forEach(u => {
-            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, dates: [] });
+            if (!byEmail.has(u.email)) byEmail.set(u.email, { email: u.email, extracciones: 0, dates: [], sheets: new Map() });
         });
 
         return Array.from(byEmail.values())
@@ -318,6 +355,7 @@ export default function MiEmpresa() {
                     first: sorted[0] ?? null,
                     last: sorted[sorted.length - 1] ?? null,
                     sparkData: buildSparkData(r.dates),
+                    sheets: r.sheets,
                     sdr: emailToUser.get(r.email),
                 };
             });
@@ -340,9 +378,10 @@ export default function MiEmpresa() {
     }
 
     const presets: { key: Exclude<RangePreset, 'custom'>; label: string }[] = [
+        { key: 'hoy', label: 'Hoy' },
         { key: '7d', label: '7 días' },
         { key: '30d', label: '30 días' },
-        { key: '3m', label: '3 meses' }
+        { key: '3m', label: '3 meses' },
     ];
 
     return (
@@ -426,22 +465,12 @@ export default function MiEmpresa() {
                         <p className="text-xs text-muted-foreground mt-1">Emails verificados</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">SDRs activos</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-bold">{sdrsActivos}</div>
-                        <p className="text-xs text-muted-foreground mt-1">Con extracciones en el período</p>
-                    </CardContent>
-                </Card>
             </div>
 
             {/* Activity chart */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Extracciones por día</CardTitle>
+                    <CardTitle>{preset === 'hoy' ? 'Extracciones por hora · hoy' : 'Extracciones por día'}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {totalExtracciones === 0 ? (
@@ -458,17 +487,20 @@ export default function MiEmpresa() {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                                <XAxis dataKey="date" tickFormatter={formatAxisDate}
+                                <XAxis
+                                    dataKey="date"
+                                    tickFormatter={preset === 'hoy' ? formatAxisHour : formatAxisDate}
                                     tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                                     tickLine={false} axisLine={false}
-                                    interval={Math.max(0, Math.floor(chartData.length / 8) - 1)} />
+                                    interval={preset === 'hoy' ? 0 : Math.max(0, Math.floor(chartData.length / 8) - 1)}
+                                />
                                 <YAxis allowDecimals={false}
                                     tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                                     tickLine={false} axisLine={false} />
                                 <Tooltip content={<ChartTooltip />} />
                                 <Area type="monotone" dataKey="extracciones" name="Extracciones"
                                     stroke="hsl(var(--primary))" strokeWidth={2}
-                                    fill="url(#gradExt)" dot={false} activeDot={{ r: 4 }} />
+                                    fill="url(#gradExt)" dot={preset === 'hoy'} activeDot={{ r: 4 }} />
                             </AreaChart>
                         </ResponsiveContainer>
                     )}
@@ -481,7 +513,8 @@ export default function MiEmpresa() {
                     <div>
                         <CardTitle>Ranking de SDRs</CardTitle>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                            {sdrRanking.filter(r => r.extracciones > 0).length} activos de {usuarios.length} registrados
+                            <span className="font-medium text-foreground">{sdrRanking.filter(r => r.extracciones > 0).length}</span> activos
+                            · <span className="font-medium text-foreground">{usuarios.length}</span> registrados
                         </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
@@ -524,10 +557,9 @@ export default function MiEmpresa() {
                                 <TableRow>
                                     <TableHead className="w-8">#</TableHead>
                                     <TableHead>SDR</TableHead>
-                                    <TableHead className="text-right">Extr.</TableHead>
-                                    <TableHead className="text-right">Inicio</TableHead>
-                                    <TableHead className="text-right">Fin</TableHead>
-                                    <TableHead className="min-w-[160px]">Tendencia</TableHead>
+                                    <TableHead className="text-right w-14">Extr.</TableHead>
+                                    <TableHead className="min-w-[240px]">Actividad</TableHead>
+                                    <TableHead>Sheets</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -535,6 +567,7 @@ export default function MiEmpresa() {
                                     const u = r.sdr;
                                     const displayName = u?.nombre || r.email;
                                     const displayEmail = u?.nombre ? r.email : undefined;
+                                    const fmt = (d: Date) => d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
                                     return (
                                         <TableRow key={r.email}>
                                             <TableCell className="text-muted-foreground font-medium">
@@ -557,17 +590,35 @@ export default function MiEmpresa() {
                                             <TableCell className="text-right">
                                                 <Badge variant={r.extracciones > 0 ? 'secondary' : 'outline'}>{r.extracciones}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
-                                                {r.first ? r.first.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                                            </TableCell>
-                                            <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
-                                                {r.last ? r.last.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                            <TableCell>
+                                                {r.sparkData.length > 0 ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-10 text-right">
+                                                            {r.first ? fmt(r.first) : ''}
+                                                        </span>
+                                                        <div className="flex-1 min-w-[160px]">
+                                                            <Sparkline data={r.sparkData} id={`spark-${i}`} />
+                                                        </div>
+                                                        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-10">
+                                                            {r.last ? fmt(r.last) : ''}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">—</span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
-                                                {r.sparkData.length > 0
-                                                    ? <Sparkline data={r.sparkData} id={`spark-${i}`} />
-                                                    : <span className="text-muted-foreground text-sm">—</span>
-                                                }
+                                                {r.sheets.size > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {Array.from(r.sheets.entries()).map(([name, count]) => (
+                                                            <Badge key={name} variant="outline" className="text-[9px] px-1.5 py-0 font-normal">
+                                                                {name} · {count}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">—</span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -617,7 +668,7 @@ export default function MiEmpresa() {
                                         return (
                                             <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setCapturePanel(c)}>
                                                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                                    {new Date(c.fecha).toLocaleDateString('es-CL')}
+                                                    {new Date(c.fecha).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                 </TableCell>
                                                 <TableCell className="font-medium text-sm">
                                                     {ld.full_name || `${ld.first_name || ''} ${ld.last_name || ''}`.trim() || '—'}
