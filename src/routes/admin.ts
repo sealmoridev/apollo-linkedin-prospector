@@ -169,11 +169,7 @@ router.get('/consumos', requireAdmin, async (req: Request, res: Response) => {
         if (desde || hasta) {
             filter.fecha = {};
             if (desde) filter.fecha.gte = new Date(desde as string);
-            if (hasta) {
-                const hastaDate = new Date(hasta as string);
-                hastaDate.setHours(23, 59, 59, 999);
-                filter.fecha.lte = hastaDate;
-            }
+            if (hasta) filter.fecha.lte = new Date(hasta as string);
         }
 
         const consumos = await prisma.consumo.findMany({
@@ -213,11 +209,7 @@ router.get('/consumos/historial', requireAdmin, async (req: Request, res: Respon
         if (desde || hasta) {
             filter.fecha = {};
             if (desde) filter.fecha.gte = new Date(desde as string);
-            if (hasta) {
-                const hastaDate = new Date(hasta as string);
-                hastaDate.setHours(23, 59, 59, 999);
-                filter.fecha.lte = hastaDate;
-            }
+            if (hasta) filter.fecha.lte = new Date(hasta as string);
         }
 
         if (usuario_id) {

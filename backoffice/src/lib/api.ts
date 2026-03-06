@@ -244,11 +244,15 @@ export const toggleTenantKey = async (id: string): Promise<{ key_active: boolean
 // CONSUMOS (Admin/SuperAdmin)
 // ==========================================
 
+// Convert a YYYY-MM-DD string to a full ISO timestamp in local timezone
+const toLocalStart = (date: string) => new Date(date + 'T00:00:00').toISOString();
+const toLocalEnd   = (date: string) => new Date(date + 'T23:59:59.999').toISOString();
+
 export const getConsumos = async (empresa_id?: string, desde?: string, hasta?: string): Promise<Consumo[]> => {
     const params = new URLSearchParams();
     if (empresa_id) params.set('empresa_id', empresa_id);
-    if (desde) params.set('desde', desde);
-    if (hasta) params.set('hasta', hasta);
+    if (desde) params.set('desde', toLocalStart(desde));
+    if (hasta) params.set('hasta', toLocalEnd(hasta));
     const qs = params.toString();
     const url = `${API_URL}/admin/consumos${qs ? '?' + qs : ''}`;
     const res = await fetch(url, { headers: getAuthHeaders() });
@@ -280,8 +284,8 @@ export const getConsumoHistorial = async (params: {
 }): Promise<ConsumoHistorialResult> => {
     const qs = new URLSearchParams();
     if (params.empresa_id) qs.set('empresa_id', params.empresa_id);
-    if (params.desde) qs.set('desde', params.desde);
-    if (params.hasta) qs.set('hasta', params.hasta);
+    if (params.desde) qs.set('desde', toLocalStart(params.desde));
+    if (params.hasta) qs.set('hasta', toLocalEnd(params.hasta));
     if (params.usuario_id) qs.set('usuario_id', params.usuario_id);
     if (params.page) qs.set('page', String(params.page));
     if (params.limit) qs.set('limit', String(params.limit));
