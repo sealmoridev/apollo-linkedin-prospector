@@ -195,6 +195,32 @@ export class ApolloClient {
   }
 
   /**
+   * Inicia el enriquecimiento de teléfono vía webhook sin bloquear.
+   * Llama a /people/match con reveal_phone_number=true, devuelve el apolloId
+   * inmediatamente. El teléfono llegará más tarde al webhook.
+   * Si Apollo devuelve el teléfono en la respuesta síncrona (algunos planes), lo
+   * incluye en phone para que el caller pueda hacer short-circuit.
+   */
+  async initiatePhoneEnrichment(linkedinUrl: string): Promise<{ apolloId: string | null; phone: string | null }> {
+    const webhookUrl = this.webhookServer?.getWebhookUrl();
+    if (!webhookUrl) {
+      throw new Error('Webhook URL is required for phone enrichment');
+    }
+
+    const response = await this.client.post<ApolloApiResponse>(
+      '/people/match',
+      { linkedin_url: linkedinUrl, reveal_phone_number: true, webhook_url: webhookUrl },
+      { headers: { 'X-Api-Key': this.apiKey } }
+    );
+
+    const person = response.data?.person;
+    const apolloId = person?.id ?? null;
+    const phone = person?.phone_numbers?.[0]?.raw_number ?? null;
+
+    return { apolloId, phone };
+  }
+
+  /**
    * Verifica los créditos disponibles en la cuenta de Apollo
    * Nota: Apollo no tiene un endpoint específico para esto,
    * así que esta es una implementación placeholder

@@ -421,12 +421,126 @@ const getProviderIconUrl = (providerId) => {
         });
     };
 
+    // ── Apollo phone cascade: async polling flow ─────────────────────────────
+    const handleApolloPhoneCascade = async (provider, container, valueEl) => {
+        const loaderHtml = `<span class="ap-loader" style="display:inline-block;border-color:#94a3b8 transparent transparent transparent;width:10px;height:10px;"></span>`;
+
+        const setContainerLoading = (msg) => {
+            if (!container) return;
+            const oldTrigger = container.querySelector('.ap-btn-validate');
+            const oldDropdown = container.querySelector('.ap-cascade-dropdown');
+            if (oldTrigger) oldTrigger.remove();
+            if (oldDropdown) oldDropdown.remove();
+            const existing = container.querySelector('.ap-cascade-loading');
+            if (existing) existing.remove();
+            const span = document.createElement('span');
+            span.className = 'ap-cascade-loading';
+            span.style.cssText = 'font-size:10px;color:#94a3b8;display:flex;align-items:center;gap:4px;';
+            span.innerHTML = `${loaderHtml} ${msg}`;
+            container.appendChild(span);
+            container.style.display = 'block';
+        };
+
+        const finishCascade = (found, phone) => {
+            cascadeResults.phone.push({ providerId: provider.id, name: provider.name, found });
+            savePreviewState();
+            if (found && phone) {
+                extractedLeadData.phoneNumber = phone;
+                if (valueEl) valueEl.textContent = phone;
+                if (container) { container.innerHTML = ''; renderCascadeBadges('phone'); }
+            } else {
+                if (container) { container.innerHTML = ''; renderCascadeBadges('phone'); }
+                setTimeout(() => renderCascadeButtons('phone'), 0);
+            }
+        };
+
+        setContainerLoading('Solicitando a Apollo...');
+
+        let apolloPersonId = null;
+        try {
+            const res = await fetch(`${apiUrl}/api/enrich-phone`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': tenantApiKey, 'x-google-id': userId },
+                body: JSON.stringify({ linkedinUrl: currentLinkedinUrl, sesion_id: currentSesionId })
+            });
+            if (!res.ok) throw new Error('request failed');
+            const data = await res.json();
+
+            // Short-circuit: Apollo devolvió teléfono síncrono
+            if (data.phone) { finishCascade(true, data.phone); return; }
+            apolloPersonId = data.apolloPersonId;
+        } catch (_) {
+            finishCascade(false, null); return;
+        }
+
+        if (!apolloPersonId) { finishCascade(false, null); return; }
+
+        // Fase de polling con timer visible
+        if (container) {
+            const existing = container.querySelector('.ap-cascade-loading');
+            if (existing) existing.remove();
+            const waitSpan = document.createElement('span');
+            waitSpan.className = 'ap-cascade-loading ap-apollo-phone-wait';
+            waitSpan.style.cssText = 'font-size:10px;color:#94a3b8;display:flex;align-items:center;gap:4px;';
+            waitSpan.innerHTML = `${loaderHtml} Esperando Apollo… <span class="ap-apollo-phone-timer">0s</span>`;
+            container.appendChild(waitSpan);
+        }
+
+        const MAX_WAIT = 5 * 60 * 1000; // 5 minutos
+        const INTERVAL  = 5000;
+        const startTime = Date.now();
+        let pollTimer   = null;
+
+        const updateTimer = () => {
+            const el = container && container.querySelector('.ap-apollo-phone-timer');
+            if (el) el.textContent = `${Math.floor((Date.now() - startTime) / 1000)}s`;
+        };
+
+        const poll = async () => {
+            updateTimer();
+            try {
+                const r = await fetch(`${apiUrl}/api/phone-status?apollo_person_id=${apolloPersonId}`, {
+                    headers: { 'x-api-key': tenantApiKey, 'x-google-id': userId }
+                });
+                const d = await r.json();
+
+                if (d.status === 'found') { finishCascade(true, d.phone); return; }
+                if (d.status === 'not_found') { finishCascade(false, null); return; }
+            } catch (_) { /* network error — keep polling */ }
+
+            const elapsed = Date.now() - startTime;
+            if (elapsed < MAX_WAIT) {
+                pollTimer = setTimeout(poll, INTERVAL);
+            } else {
+                // Timeout: mostrar mensaje breve antes de limpiar
+                if (container) {
+                    const existing = container.querySelector('.ap-cascade-loading');
+                    if (existing) existing.remove();
+                    const msg = document.createElement('span');
+                    msg.style.cssText = 'font-size:10px;color:#f59e0b;';
+                    msg.textContent = 'Apollo no respondió. Prueba otro proveedor.';
+                    container.appendChild(msg);
+                }
+                setTimeout(() => finishCascade(false, null), 3000);
+            }
+        };
+
+        pollTimer = setTimeout(poll, INTERVAL);
+    };
+
     const handleCascadeSearch = async (field, provider) => {
         if (!extractedLeadData) return;
 
         const containerId = field === 'email' ? 'apCascadeEmail' : 'apCascadePhone';
         const container = document.getElementById(containerId);
         const valueEl = document.getElementById(field === 'email' ? 'apDataEmail' : 'apDataPhone');
+
+        // Apollo phone usa flujo async con polling — no pasa por /api/enrich-field
+        if (provider.id === 'apollo' && field === 'phone') {
+            triedProviders.phone.add('apollo');
+            await handleApolloPhoneCascade(provider, container, valueEl);
+            return;
+        }
 
         if (container) {
             // Clear only trigger/dropdown, keep badge wrap

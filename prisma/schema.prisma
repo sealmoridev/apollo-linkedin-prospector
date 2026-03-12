@@ -86,6 +86,18 @@ model Consumo {
   fecha             DateTime @default(now())
 }
 
+model PendingPhone {
+  id               String   @id @default(uuid())
+  apollo_person_id String   @unique
+  linkedin_url     String
+  usuario_id       String
+  empresa_id       String
+  status           String   @default("pending") // pending | found | not_found
+  phone            String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+}
+
 model CreditRate {
   id         String   @id @default(uuid())
   provider   String   // 'apollo','prospeo','leadmagic','findymail','millionverifier'

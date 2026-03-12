@@ -69,15 +69,26 @@ const enrichmentService = new EnrichmentService(webhookServer);
 // Crear servicio de Google Sheets
 const sheetsService = new SheetsService();
 
-// Escuchar eventos del webhook para actualizar teléfonos en Sheets
+// Escuchar eventos del webhook de Apollo → actualizar PendingPhone en DB
 webhookServer.on('data', async (data) => {
-  // Nota: en un escenario real, Apollo no sabe el userId. Tendrías que mapear el requestId con el userId que lo inició.
-  // Para este prototipo, vamos a intentar ver si existe un 'userId' en la metadata, de lo contrario usaremos 'default'
-  const userId = data.rawData?.metadata?.userId || 'default';
+  const personId: string | null = data.personId;
+  if (!personId) return;
 
-  if (data.phoneNumbers && data.phoneNumbers.length > 0 && data.linkedinUrl) {
-    console.log(`[Google Sheets] Intentando actualizar teléfono para URL: ${data.linkedinUrl} (user: ${userId})`);
-    await sheetsService.updatePhone(userId, data.linkedinUrl, data.phoneNumbers.map((p: any) => p.sanitized_number));
+  const phone: string | null =
+    data.phoneNumbers?.[0]?.sanitized_number ||
+    data.phoneNumbers?.[0]?.raw_number ||
+    null;
+
+  try {
+    const updated = await prisma.pendingPhone.updateMany({
+      where: { apollo_person_id: personId, status: 'pending' },
+      data: { status: phone ? 'found' : 'not_found', phone }
+    });
+    if (updated.count > 0) {
+      console.log(`[Webhook] PendingPhone resolved: personId=${personId} phone=${phone ?? 'not found'}`);
+    }
+  } catch (err) {
+    console.error('[Webhook] Failed to update PendingPhone:', err);
   }
 });
 
@@ -315,55 +326,96 @@ app.post('/api/verify-email', tenantAuthMiddleware, async (req: Request, res: Re
   }
 });
 
-// Solicitar teléfono de forma independiente (solo para tenants Apollo con webhook)
+// Solicitar teléfono de Apollo vía webhook async (cascade phone)
+// Responde inmediatamente con el apolloPersonId para que la extensión haga polling.
 app.post('/api/enrich-phone', tenantAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { linkedinUrl, sesion_id } = req.body;
-    const tenant = req.tenant!;
+    const tenant = req.tenant! as any;
     const user = req.extensionUser!;
 
     if (!linkedinUrl) {
       return res.status(400).json({ error: 'linkedinUrl is required' });
     }
-
-    const provider = (tenant as any).enrichment_provider || 'apollo';
-
-    // Para Prospeo, el teléfono ya viene en la extracción inicial — este endpoint no aplica
-    if (provider === 'prospeo') {
-      return res.status(400).json({
-        error: 'Este endpoint no aplica para tenants Prospeo. El teléfono se incluye automáticamente en la extracción.'
-      });
-    }
-
     if (!tenant.apollo_api_key) {
       return res.status(403).json({ error: 'Apollo API Key no configurada para el tenant.' });
     }
 
-    console.log(`[API] Phone request for: ${linkedinUrl} by user ${user.id}`);
+    console.log(`[API] Apollo phone request for: ${linkedinUrl} by ${user.id}`);
 
-    // Registrar crédito consumido inmediatamente
+    const apolloClient = new ApolloClient(tenant.apollo_api_key, webhookServer);
+    const { apolloId, phone: syncPhone } = await apolloClient.initiatePhoneEnrichment(linkedinUrl);
+
+    if (!apolloId) {
+      return res.status(404).json({ error: 'Perfil no encontrado en Apollo.' });
+    }
+
+    // Si Apollo ya devolvió el teléfono en la respuesta síncrona (short-circuit)
+    if (syncPhone) {
+      await prisma.consumo.create({
+        data: {
+          usuario_id: user.id,
+          empresa_id: tenant.id,
+          creditos_apollo: 1,
+          creditos_verifier: 0,
+          sesion_id: sesion_id || null,
+          credit_breakdown: { email_credits: 0, phone_credits: 1, verification_credits: 0, providers: { apollo: 1 } }
+        }
+      });
+      return res.json({ success: true, apolloPersonId: apolloId, phone: syncPhone });
+    }
+
+    // Crear/actualizar registro pendiente
+    await prisma.pendingPhone.upsert({
+      where: { apollo_person_id: apolloId },
+      create: { apollo_person_id: apolloId, linkedin_url: linkedinUrl, usuario_id: user.id, empresa_id: tenant.id, status: 'pending' },
+      update: { status: 'pending', phone: null }
+    });
+
+    // Registrar crédito (Apollo cobra en el request, no al encontrar)
     await prisma.consumo.create({
       data: {
         usuario_id: user.id,
         empresa_id: tenant.id,
         creditos_apollo: 1,
         creditos_verifier: 0,
-        sesion_id: sesion_id || null
+        sesion_id: sesion_id || null,
+        credit_breakdown: { email_credits: 0, phone_credits: 1, verification_credits: 0, providers: { apollo: 1 } }
       }
     });
 
-    // Disparar enriquecimiento async con teléfono — la respuesta llega al webhook y actualiza el Sheet
-    enrichmentService.enrichProfile({ provider: 'apollo', apiKey: tenant.apollo_api_key }, linkedinUrl, user.id, true)
-      .catch(err => console.error('[API] enrich-phone async error:', err));
-
-    res.json({ success: true, message: 'Solicitud enviada. El teléfono llegará al Sheet vía webhook.' });
+    res.json({ success: true, apolloPersonId: apolloId });
 
   } catch (error) {
-    console.error('[API] Error requesting phone:', error);
+    console.error('[API] Error requesting Apollo phone:', error);
     res.status(500).json({
       error: 'Error al solicitar teléfono',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+});
+
+// Consultar estado de una solicitud de teléfono Apollo pendiente
+app.get('/api/phone-status', tenantAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const apolloPersonId = req.query.apollo_person_id as string;
+    if (!apolloPersonId) {
+      return res.status(400).json({ error: 'apollo_person_id is required' });
+    }
+
+    const pending = await prisma.pendingPhone.findUnique({
+      where: { apollo_person_id: apolloPersonId }
+    });
+
+    if (!pending) {
+      return res.status(404).json({ error: 'No pending request found' });
+    }
+
+    res.json({ status: pending.status, phone: pending.phone });
+
+  } catch (error) {
+    console.error('[API] Error checking phone status:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

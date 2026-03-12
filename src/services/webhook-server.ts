@@ -86,14 +86,17 @@ export class WebhookServer extends EventEmitter {
   }
 
   private parseWebhookData(data: any) {
-    // Apollo envía los datos en diferentes formatos dependiendo del tipo
-    // Aquí parseamos la estructura común
+    // Apollo puede enviar { people: [...] } (formato nativo/bulk) o { person: {...} } (legacy).
+    // Normalizamos ambos a un primer elemento unificado.
+    const people: any[] = data.people || (data.person ? [data.person] : []);
+    const first = people[0] || {};
+
     return {
-      requestId: data.request_id || data.id,
-      personId: data.person?.id,
-      linkedinUrl: data.person?.linkedin_url,
-      phoneNumbers: data.person?.phone_numbers || [],
-      personalEmails: data.person?.personal_emails || [],
+      requestId: first.id || data.request_id || data.id,
+      personId: first.id || null,
+      linkedinUrl: first.linkedin_url || null,
+      phoneNumbers: first.phone_numbers || [],
+      personalEmails: first.personal_emails || [],
       organizationId: data.organization?.id,
       timestamp: new Date(),
       rawData: data
