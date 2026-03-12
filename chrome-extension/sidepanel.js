@@ -1310,4 +1310,239 @@ const getProviderIconUrl = (providerId) => {
         }
     });
 
+    // ── Sheets mode ──────────────────────────────────────────────────────────
+
+    const sheetsSection       = document.getElementById('apSheetsSection');
+    const sheetsModeName      = document.getElementById('apSheetsModeName');
+    const sheetsModeLink      = document.getElementById('apSheetsModeLink');
+    const sheetsLeadList      = document.getElementById('apSheetsLeadList');
+    const sheetsLeadListInner = document.getElementById('apSheetsLeadListInner');
+    const sheetsDiffView      = document.getElementById('apSheetsDiffView');
+    const sheetsDiffRows      = document.getElementById('apSheetsDiffRows');
+    const sheetsSyncBtn       = document.getElementById('apSheetsSyncBtn');
+    const sheetsSyncBtnText   = document.getElementById('apSheetsSyncBtnText');
+    const sheetsSyncLoader    = document.getElementById('apSheetsSyncLoader');
+    const sheetsBackBtn       = document.getElementById('apSheetsBackBtn');
+    const sheetsStatus        = document.getElementById('apSheetsStatus');
+
+    let currentSpreadsheetId = null;
+    let currentSheetsUrl     = '';
+    let selectedConsumoId    = null;
+    let selectedRowIndex     = null;
+    let loadedSheetLeads     = [];
+
+    const FIELD_LABELS = {
+        full_name:      'Nombre completo',
+        first_name:     'Nombre',
+        last_name:      'Apellido',
+        title:          'Cargo',
+        primary_email:  'Email principal',
+        personal_email: 'Email personal',
+        phone_number:   'Teléfono',
+        company_name:   'Empresa',
+        company_domain: 'Dominio empresa',
+        industry:       'Industria',
+        location:       'Ubicación',
+        email_status:   'Estado email',
+        notes:          'Notas',
+    };
+    const SYNCABLE_FIELDS_LIST = Object.keys(FIELD_LABELS);
+
+    const isGoogleSheetsUrl    = (url) => !!(url && url.includes('docs.google.com/spreadsheets/d/'));
+    const extractSpreadsheetId = (url) => { const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/); return m ? m[1] : null; };
+    const extractRowFromHash   = (url)  => { const m = (url.split('#')[1] || '').match(/range=[A-Z](\d+)/); return m ? parseInt(m[1]) : null; };
+
+    const setSheetsStatus = (html, isError = false) => {
+        if (!html) { sheetsStatus.style.display = 'none'; sheetsStatus.innerHTML = ''; return; }
+        sheetsStatus.style.cssText = `display:block; font-size:12px; padding:8px 10px; border-radius:8px; text-align:center; margin-top:4px; color:${isError ? '#dc2626' : '#16a34a'}; background:${isError ? 'rgba(220,38,38,0.07)' : 'rgba(22,163,74,0.07)'}; border:1px solid ${isError ? 'rgba(220,38,38,0.2)' : 'rgba(22,163,74,0.2)'};`;
+        sheetsStatus.innerHTML = html;
+    };
+
+    const enterSheetsMode = async (url) => {
+        currentSpreadsheetId = extractSpreadsheetId(url);
+        if (!currentSpreadsheetId) return;
+
+        sheetsSection.style.display  = 'flex';
+        extractSection.style.display = 'none';
+        previewSection.style.display = 'none';
+        sheetsLeadList.style.display = 'block';
+        sheetsDiffView.style.display = 'none';
+
+        sheetsModeLink.href          = url;
+        sheetsModeLink.style.display = 'flex';
+        sheetsModeName.textContent   = 'Cargando...';
+
+        await loadSheetLeads();
+
+        const row = extractRowFromHash(url);
+        if (row && loadedSheetLeads.some(l => l.row_index === row)) {
+            await showSheetDiff(row);
+        }
+    };
+
+    const exitSheetsMode = () => {
+        sheetsSection.style.display  = 'none';
+        currentSpreadsheetId         = null;
+        currentSheetsUrl             = '';
+        selectedConsumoId            = null;
+        selectedRowIndex             = null;
+        sheetsLeadList.style.display = 'block';
+        sheetsDiffView.style.display = 'none';
+        setSheetsStatus('');
+    };
+
+    const loadSheetLeads = async () => {
+        if (!currentSpreadsheetId) return;
+        sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:24px 0;color:#94a3b8;font-size:12px;"><span class="ap-loader" style="display:inline-block;border-color:#94a3b8 transparent transparent;width:14px;height:14px;margin-right:6px;vertical-align:-3px;"></span>Cargando leads...</div>';
+        try {
+            const res = await fetch(`${apiUrl}/api/sheet-leads?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}`);
+            if (!res.ok) throw new Error('Server error');
+            const data = await res.json();
+            loadedSheetLeads = data.leads || [];
+            sheetsModeName.textContent = `${loadedSheetLeads.length} lead${loadedSheetLeads.length !== 1 ? 's' : ''} guardado${loadedSheetLeads.length !== 1 ? 's' : ''}`;
+            renderSheetLeadList();
+        } catch (_) {
+            sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:24px 0;color:#dc2626;font-size:12px;">Error al cargar leads</div>';
+        }
+    };
+
+    const renderSheetLeadList = () => {
+        if (loadedSheetLeads.length === 0) {
+            sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:32px 16px;color:#94a3b8;font-size:12px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>No hay leads guardados en esta hoja aún</div>';
+            return;
+        }
+        const html = loadedSheetLeads.map(lead => {
+            const d    = lead.lead_data || {};
+            const name = d.full_name || `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Sin nombre';
+            const sub  = [d.title, d.company_name].filter(Boolean).join(' · ') || d.primary_email || '—';
+            const hasRow = lead.row_index != null;
+            const fecha  = new Date(lead.fecha).toLocaleDateString('es', { day: '2-digit', month: 'short' });
+            return `<button class="ap-sheets-lead-item" data-id="${lead.id}" data-row="${hasRow ? lead.row_index : ''}" style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;cursor:pointer;text-align:left;transition:background 0.15s;margin-bottom:4px;">
+  <div style="flex-shrink:0;width:28px;height:28px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#475569;">${name.charAt(0).toUpperCase()}</div>
+  <div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div><div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div>
+  <div style="flex-shrink:0;text-align:right;">${hasRow ? `<div style="font-size:10px;font-weight:600;color:#7c3aed;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:4px;padding:1px 5px;">F${lead.row_index}</div>` : ''}<div style="font-size:9px;color:#94a3b8;margin-top:2px;">${fecha}</div></div>
+</button>`;
+        }).join('');
+        sheetsLeadListInner.innerHTML = html;
+        sheetsLeadListInner.querySelectorAll('.ap-sheets-lead-item').forEach(btn => {
+            btn.addEventListener('mouseenter', () => { btn.style.background = '#f8fafc'; });
+            btn.addEventListener('mouseleave', () => { btn.style.background = '#fff'; });
+            btn.addEventListener('click', async () => {
+                const row = btn.dataset.row ? parseInt(btn.dataset.row) : null;
+                await showSheetDiff(row, btn.dataset.id);
+            });
+        });
+    };
+
+    const showSheetDiff = async (rowIndex, consumoId) => {
+        const lead = loadedSheetLeads.find(l => l.id === consumoId) ||
+                     (rowIndex ? loadedSheetLeads.find(l => l.row_index === rowIndex) : null);
+
+        selectedConsumoId = consumoId || lead?.id || null;
+        selectedRowIndex  = rowIndex  ?? lead?.row_index ?? null;
+
+        sheetsLeadList.style.display = 'none';
+        sheetsDiffView.style.display = 'flex';
+        sheetsDiffRows.innerHTML     = '<div style="text-align:center;padding:16px 0;color:#94a3b8;font-size:12px;"><span class="ap-loader" style="display:inline-block;border-color:#94a3b8 transparent transparent;width:12px;height:12px;margin-right:4px;vertical-align:-2px;"></span>Leyendo hoja...</div>';
+
+        if (!selectedRowIndex) {
+            renderDiff(lead?.lead_data || {}, null, true);
+            return;
+        }
+        try {
+            const res = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}`);
+            if (!res.ok) throw new Error('Error al leer la fila');
+            const data = await res.json();
+            if (data.consumoId) selectedConsumoId = data.consumoId;
+            renderDiff(data.dbData || {}, data.sheetData || {}, false);
+        } catch (err) {
+            sheetsDiffRows.innerHTML = `<div style="text-align:center;padding:16px 0;color:#dc2626;font-size:12px;">Error: ${err.message}</div>`;
+        }
+    };
+
+    const renderDiff = (dbData, sheetData, dbOnly) => {
+        const db    = dbData    || {};
+        const sheet = sheetData || {};
+        let changeCount = 0;
+        const rows = SYNCABLE_FIELDS_LIST.map(field => {
+            const dbVal    = String(db[field]    ?? '');
+            const sheetVal = dbOnly ? dbVal : String(sheet[field] ?? '');
+            const changed  = !dbOnly && sheetVal !== dbVal;
+            if (changed) changeCount++;
+            return `<div style="padding:6px 8px;border-radius:6px;background:${changed ? '#fffbeb' : 'transparent'};border:${changed ? '1px solid #fde68a' : 'none'};">
+  <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:${changed ? '#d97706' : '#64748b'};margin-bottom:2px;">${FIELD_LABELS[field]}${changed ? ' · cambiado' : ''}</div>
+  ${changed ? `<div style="font-size:11px;color:#9ca3af;text-decoration:line-through;word-break:break-all;">${dbVal || '—'}</div><div style="font-size:12px;color:#1e293b;font-weight:500;word-break:break-all;">${sheetVal || '—'}</div>` : `<div style="font-size:12px;color:#1e293b;word-break:break-all;">${sheetVal || dbVal || '—'}</div>`}
+</div>`;
+        }).join('');
+        sheetsDiffRows.innerHTML = rows;
+
+        if (!dbOnly && selectedConsumoId) {
+            sheetsSyncBtn.style.display = '';
+            sheetsSyncBtn.disabled      = changeCount === 0;
+            sheetsSyncBtnText.innerHTML = changeCount === 0
+                ? '<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Sin cambios'
+                : `<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> Sincronizar ${changeCount} campo${changeCount !== 1 ? 's' : ''}`;
+        } else {
+            sheetsSyncBtn.style.display = 'none';
+        }
+    };
+
+    sheetsSyncBtn.addEventListener('click', async () => {
+        if (!selectedConsumoId || !selectedRowIndex) return;
+        sheetsSyncBtn.disabled          = true;
+        sheetsSyncBtnText.style.display = 'none';
+        sheetsSyncLoader.style.display  = 'inline-block';
+        try {
+            const rowRes = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}`);
+            if (!rowRes.ok) throw new Error('Error al leer la fila');
+            const { sheetData } = await rowRes.json();
+            const syncRes = await fetch(`${apiUrl}/api/sheet-sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, consumoId: selectedConsumoId, sheetData })
+            });
+            if (!syncRes.ok) throw new Error('Error al sincronizar');
+            const lead = loadedSheetLeads.find(l => l.id === selectedConsumoId);
+            if (lead) lead.lead_data = { ...(lead.lead_data || {}), ...sheetData };
+            setSheetsStatus('✓ Datos sincronizados correctamente');
+            setTimeout(() => setSheetsStatus(''), 3500);
+            renderDiff(lead?.lead_data || {}, sheetData, false);
+        } catch (err) {
+            setSheetsStatus(`Error: ${err.message}`, true);
+        } finally {
+            sheetsSyncBtnText.style.display = 'flex';
+            sheetsSyncLoader.style.display  = 'none';
+        }
+    });
+
+    sheetsBackBtn.addEventListener('click', () => {
+        sheetsLeadList.style.display = 'block';
+        sheetsDiffView.style.display = 'none';
+        setSheetsStatus('');
+    });
+
+    // Track tab URL changes to detect Google Sheets navigation
+    chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+        if (!tab.active || !changeInfo.url) return;
+        const url = changeInfo.url;
+        if (isGoogleSheetsUrl(url)) {
+            if (url !== currentSheetsUrl) {
+                currentSheetsUrl   = url;
+                currentLinkedinUrl = '';
+                enterSheetsMode(url).catch(() => {});
+            }
+        } else if (currentSheetsUrl) {
+            exitSheetsMode();
+            currentLinkedinUrl = url;
+            updateUrlDisplay();
+        }
+    });
+
+    // If sidepanel was opened while already on a Google Sheets tab
+    if (isGoogleSheetsUrl(currentLinkedinUrl)) {
+        currentSheetsUrl   = currentLinkedinUrl;
+        currentLinkedinUrl = '';
+        enterSheetsMode(currentSheetsUrl).catch(() => {});
+    }
+
 })();

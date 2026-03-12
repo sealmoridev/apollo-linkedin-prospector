@@ -82,6 +82,7 @@ model Consumo {
   sheet_name        String?
 
   credit_breakdown  Json?
+  row_index         Int?
 
   fecha             DateTime @default(now())
 }

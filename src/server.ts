@@ -731,6 +731,7 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
               sesion_id: sesion_id || null,
               sheet_id: sheetResult.spreadsheetId || spreadsheetId,
               sheet_name: sheetName || null,
+              row_index: sheetResult.rowIndex ?? null,
               credit_breakdown: breakdown as any,
               lead_data: {
                 created_at: new Date().toISOString(),
@@ -773,6 +774,98 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
       error: 'Exception while saving to sheets',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+});
+
+// ============================================================================
+// SHEET SYNC ROUTES
+// ============================================================================
+
+/** List saved leads for a specific spreadsheet (for Sheets mode in sidepanel) */
+app.get('/api/sheet-leads', async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string;
+    const spreadsheetId = req.query.spreadsheetId as string;
+
+    if (!userId || !spreadsheetId) {
+      return res.status(400).json({ error: 'userId and spreadsheetId are required' });
+    }
+
+    const consumos = await prisma.consumo.findMany({
+      where: { usuario_id: userId, sheet_id: spreadsheetId },
+      orderBy: { fecha: 'desc' },
+      take: 200,
+      select: { id: true, fecha: true, row_index: true, lead_data: true }
+    });
+
+    res.json({ leads: consumos });
+  } catch (error) {
+    console.error('[SheetSync] Error fetching sheet leads:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+/** Read a specific row from the Google Sheet and compare with DB lead_data */
+app.get('/api/sheet-row', async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string;
+    const spreadsheetId = req.query.spreadsheetId as string;
+    const rowIndex = parseInt(req.query.rowIndex as string);
+
+    if (!userId || !spreadsheetId || isNaN(rowIndex)) {
+      return res.status(400).json({ error: 'userId, spreadsheetId, and rowIndex are required' });
+    }
+
+    const [sheetData, consumo] = await Promise.all([
+      sheetsService.readRow(userId, spreadsheetId, rowIndex),
+      prisma.consumo.findFirst({
+        where: { usuario_id: userId, sheet_id: spreadsheetId, row_index: rowIndex },
+        select: { id: true, lead_data: true }
+      })
+    ]);
+
+    res.json({ sheetData, dbData: consumo?.lead_data ?? null, consumoId: consumo?.id ?? null });
+  } catch (error) {
+    console.error('[SheetSync] Error reading sheet row:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown' });
+  }
+});
+
+/** Sync changes from Google Sheet row back into the DB lead_data */
+const SYNCABLE_FIELDS = new Set([
+  'full_name', 'first_name', 'last_name', 'title',
+  'primary_email', 'personal_email', 'phone_number',
+  'company_name', 'company_domain', 'industry', 'location',
+  'email_status', 'notes'
+]);
+
+app.post('/api/sheet-sync', async (req: Request, res: Response) => {
+  try {
+    const { userId, consumoId, sheetData } = req.body;
+
+    if (!userId || !consumoId || !sheetData || typeof sheetData !== 'object') {
+      return res.status(400).json({ error: 'userId, consumoId, and sheetData are required' });
+    }
+
+    const consumo = await prisma.consumo.findUnique({ where: { id: consumoId } });
+    if (!consumo || consumo.usuario_id !== userId) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+
+    // Only allow syncable fields (exclude immutables: created_at, linkedin_url, sdr_*)
+    const filteredChanges: Record<string, string> = {};
+    for (const [k, v] of Object.entries(sheetData)) {
+      if (SYNCABLE_FIELDS.has(k)) filteredChanges[k] = String(v ?? '');
+    }
+
+    const updatedLeadData = { ...(consumo.lead_data as Record<string, any> ?? {}), ...filteredChanges };
+    await prisma.consumo.update({ where: { id: consumoId }, data: { lead_data: updatedLeadData } });
+
+    console.log(`[SheetSync] Synced consumo ${consumoId} for user ${userId}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[SheetSync] Error syncing:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 

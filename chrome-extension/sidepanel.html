@@ -67,6 +67,29 @@
     /* Save, cancel, result don't shrink — always visible at bottom */
     #apSaveBtn, #apCancelBtn, #apResultDiv { flex-shrink: 0; }
 
+    /* Sheets mode: fills remaining space */
+    #apSheetsSection {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      gap: 10px !important;
+    }
+    #apSheetsLeadList {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    #apSheetsDiffView {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #apSheetsDiffCard {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
     /* Onboarding: fit inside the padded body (no negative-margin clip) */
     #apOnboarding {
       flex: 1;
@@ -268,6 +291,59 @@
         <button id="apCancelBtn" class="ap-btn-cancel">
           <div style="display:flex; align-items:center; justify-content:center; gap:4px;"><svg style="width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> Cancelar</div>
         </button>
+      </div>
+
+      <!-- MODO SHEETS — visible when on a Google Sheets page -->
+      <div id="apSheetsSection" style="display:none; flex-direction:column; gap:10px; padding:0 2px;">
+
+        <!-- Header card: sheet name + open link -->
+        <div class="ap-card" style="padding:10px 12px; flex-shrink:0;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
+            </svg>
+            <div style="flex:1; min-width:0;">
+              <div id="apSheetsModeTitle" style="font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:#64748b; margin-bottom:1px;">Modo Sheets</div>
+              <div id="apSheetsModeName" style="font-size:12px; font-weight:600; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Cargando...</div>
+            </div>
+            <a id="apSheetsModeLink" href="#" target="_blank" style="display:none; color:#64748b; flex-shrink:0;" title="Abrir en Sheets">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- Lead list (default view) -->
+        <div id="apSheetsLeadList" style="flex:1; min-height:0; overflow-y:auto;">
+          <div id="apSheetsLeadListInner" style="display:flex; flex-direction:column; gap:4px; padding:0 2px;">
+            <div style="text-align:center; padding:24px 0; color:#94a3b8; font-size:12px;">
+              <span class="ap-loader" style="display:inline-block; border-color:#94a3b8 transparent transparent; width:14px; height:14px; margin-right:6px; vertical-align:-3px;"></span>
+              Cargando leads...
+            </div>
+          </div>
+        </div>
+
+        <!-- Diff view (shown when a lead row is selected) -->
+        <div id="apSheetsDiffView" style="display:none; flex:1; min-height:0; flex-direction:column; gap:8px; overflow:hidden;">
+          <div id="apSheetsDiffCard" style="flex:1; min-height:0; overflow-y:auto; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
+            <div id="apSheetsDiffRows" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
+          <button id="apSheetsSyncBtn" class="ap-btn-primary" style="flex-shrink:0;">
+            <span id="apSheetsSyncBtnText" style="display:flex; align-items:center; justify-content:center; gap:6px;">
+              <svg style="width:14px; height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              Sincronizar cambios
+            </span>
+            <span id="apSheetsSyncLoader" class="ap-loader" style="display:none;"></span>
+          </button>
+          <button id="apSheetsBackBtn" class="ap-btn-cancel" style="flex-shrink:0;">
+            <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+              <svg style="width:13px; height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              Volver a lista
+            </div>
+          </button>
+        </div>
+
+        <!-- Status messages for sheets mode -->
+        <div id="apSheetsStatus" style="flex-shrink:0;"></div>
       </div>
 
       <!-- Mensajes de Resultado -->

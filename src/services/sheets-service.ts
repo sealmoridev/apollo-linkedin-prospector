@@ -205,7 +205,7 @@ export class SheetsService {
     /**
      * Guarda un perfil en el Google Sheet específico
      */
-    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string, sdrInfo?: { id: string; nombre: string | null; email: string }): Promise<{ success: boolean; spreadsheetId?: string }> {
+    async appendLead(userId: string, spreadsheetId: string, lead: EnrichedLead, sheetName?: string, sdrInfo?: { id: string; nombre: string | null; email: string }): Promise<{ success: boolean; spreadsheetId?: string; rowIndex?: number }> {
         try {
             // Verificar si se solicitó crear una nueva hoja
             if (spreadsheetId === 'NEW_SHEET') {
@@ -252,7 +252,7 @@ export class SheetsService {
                 ]
             ];
 
-            await sheets.spreadsheets.values.append({
+            const appendResponse = await sheets.spreadsheets.values.append({
                 spreadsheetId: spreadsheetId,
                 range: 'Leads Base!A:R',
                 valueInputOption: 'RAW',
@@ -262,13 +262,43 @@ export class SheetsService {
                 }
             });
 
-            console.log(`✅ Lead "${lead.fullName}" insertado para usuario ${userId}.`);
-            return { success: true, spreadsheetId };
+            // Parse row number from updatedRange (e.g. "'Leads Base'!A5:R5" → 5)
+            const updatedRange = appendResponse.data.updates?.updatedRange || '';
+            const rowMatch = updatedRange.match(/[A-Z](\d+):/);
+            const rowIndex = rowMatch ? parseInt(rowMatch[1]) : undefined;
+
+            console.log(`✅ Lead "${lead.fullName}" insertado para usuario ${userId} (row ${rowIndex ?? 'unknown'}).`);
+            return { success: true, spreadsheetId, rowIndex };
 
         } catch (error) {
             console.error(`❌ Error insertando Lead en Sheets para usuario ${userId}:`, error);
             return { success: false };
         }
+    }
+
+    // Column order in the sheet
+    private static SHEET_COLUMNS = [
+        'created_at', 'full_name', 'first_name', 'last_name', 'title',
+        'primary_email', 'personal_email', 'phone_number', 'company_name',
+        'company_domain', 'industry', 'location', 'linkedin_url',
+        'email_status', 'notes', 'sdr_id', 'sdr_name', 'sdr_mail'
+    ] as const;
+
+    /**
+     * Lee una fila específica (por número 1-based) de la hoja Leads Base
+     */
+    async readRow(userId: string, spreadsheetId: string, rowIndex: number): Promise<Record<string, string>> {
+        const sheets = this.getUserSheetsClient(userId);
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: `Leads Base!A${rowIndex}:R${rowIndex}`,
+        });
+        const row = response.data.values?.[0] || [];
+        const result: Record<string, string> = {};
+        SheetsService.SHEET_COLUMNS.forEach((col, i) => {
+            result[col] = row[i] != null ? String(row[i]) : '';
+        });
+        return result;
     }
 
     /**
