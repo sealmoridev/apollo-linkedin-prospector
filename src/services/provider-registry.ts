@@ -27,10 +27,13 @@ export function getConfiguredProviders(tenant: Record<string, any>): ProviderCap
   return PROVIDER_REGISTRY
     .filter(p => !!tenant[p.apiKeyField])
     .map(p => {
-      if (p.id === primaryId) return p; // primary: all fields, no restriction
       const cfg = providerConfig[p.id];
       const fields = (['email', 'phone'] as FieldType[]).filter(f => {
-        if (!cfg) return true; // not configured → default enabled
+        // Primary email: always available in cascade (primary already attempted it).
+        if (p.id === primaryId && f === 'email') return true;
+        // Phone (any provider, including primary): respect toggle — primary never
+        // fetches phone in the initial call, so the toggle is meaningful.
+        if (!cfg) return true; // no config → default enabled
         return cfg[f] !== false;
       });
       return { ...p, fields };

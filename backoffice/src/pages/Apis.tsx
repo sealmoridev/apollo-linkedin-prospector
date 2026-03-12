@@ -163,7 +163,7 @@ function CapabilityToggles({ providerId: _pid, hasKey, emailEnabled, phoneEnable
     return (
         <div className="mt-4 pt-3 border-t border-border">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Respaldo para:
+                Cascada para:
             </p>
             <div className="flex items-center gap-4">
                 <Toggle
