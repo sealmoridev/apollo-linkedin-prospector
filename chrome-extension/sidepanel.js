@@ -1406,9 +1406,38 @@ const getProviderIconUrl = (providerId) => {
         }
     };
 
+    const linkLeadsToSheet = async () => {
+        sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:24px 0;color:#94a3b8;font-size:12px;"><span class="ap-loader" style="display:inline-block;border-color:#7c3aed transparent transparent;width:14px;height:14px;margin-right:6px;vertical-align:-3px;border-width:2px;"></span>Escaneando hoja...</div>';
+        try {
+            const res = await fetch(`${apiUrl}/api/sheet-link-leads`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, spreadsheetId: currentSpreadsheetId })
+            });
+            if (!res.ok) throw new Error('Error del servidor');
+            const data = await res.json();
+            if (data.linked > 0) {
+                await loadSheetLeads(); // reload with newly linked leads
+            } else {
+                sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:32px 16px;color:#94a3b8;font-size:12px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>No se encontraron leads registrados en esta hoja</div>';
+            }
+        } catch (err) {
+            sheetsLeadListInner.innerHTML = `<div style="text-align:center;padding:24px 0;color:#dc2626;font-size:12px;">Error: ${err.message}</div>`;
+        }
+    };
+
     const renderSheetLeadList = () => {
         if (loadedSheetLeads.length === 0) {
-            sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:32px 16px;color:#94a3b8;font-size:12px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>No hay leads guardados en esta hoja aún</div>';
+            sheetsLeadListInner.innerHTML = `
+<div style="text-align:center;padding:24px 16px;color:#94a3b8;font-size:12px;">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+  <p style="margin:0 0 12px;">No hay leads vinculados a esta hoja.<br>¿Tienes leads guardados antes del update?</p>
+  <button id="apSheetsLinkBtn" style="font-size:11px;font-weight:600;color:#7c3aed;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+    Vincular leads existentes
+  </button>
+</div>`;
+            document.getElementById('apSheetsLinkBtn').addEventListener('click', linkLeadsToSheet);
             return;
         }
         const html = loadedSheetLeads.map(lead => {
@@ -1479,7 +1508,9 @@ const getProviderIconUrl = (providerId) => {
             btn.disabled = true;
             btn.innerHTML = '<span class="ap-loader" style="display:inline-block;border-color:#7c3aed transparent transparent;width:10px;height:10px;margin-right:4px;vertical-align:-1px;"></span> Buscando...';
             try {
-                const res = await fetch(`${apiUrl}/api/sheet-find-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&linkedinUrl=${encodeURIComponent(linkedinUrl)}`);
+                // Pass consumoId so positional matching resolves duplicates correctly
+                const consumoParam = selectedConsumoId ? `&consumoId=${encodeURIComponent(selectedConsumoId)}` : '';
+                const res = await fetch(`${apiUrl}/api/sheet-find-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&linkedinUrl=${encodeURIComponent(linkedinUrl)}${consumoParam}`);
                 if (!res.ok) throw new Error('Error del servidor');
                 const data = await res.json();
                 if (data.rowIndex) {

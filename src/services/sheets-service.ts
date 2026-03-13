@@ -302,6 +302,27 @@ export class SheetsService {
     }
 
     /**
+     * Lee todas las filas del sheet y devuelve un mapa { linkedin_url → rowIndex }.
+     * Útil para vincular retroactivamente consumos sin sheet_id.
+     */
+    async readAllLinkedinUrls(userId: string, spreadsheetId: string): Promise<Array<{ rowIndex: number; linkedinUrl: string }>> {
+        const sheets = this.getUserSheetsClient(userId);
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: 'Leads Base!M:M', // linkedin_url column only
+        });
+        const rows = response.data.values || [];
+        const result: Array<{ rowIndex: number; linkedinUrl: string }> = [];
+        rows.forEach((row, i) => {
+            const url = (row[0] || '').trim().replace(/\/$/, '');
+            if (url && i > 0) { // skip header row (i=0)
+                result.push({ rowIndex: i + 1, linkedinUrl: url });
+            }
+        });
+        return result;
+    }
+
+    /**
      * Busca la fila de un lead por su linkedin_url (columna M).
      * Retorna el número de fila 1-based, o null si no lo encuentra.
      */

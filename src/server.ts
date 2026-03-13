@@ -831,32 +831,151 @@ app.get('/api/sheet-row', async (req: Request, res: Response) => {
   }
 });
 
+// ── Shared helpers for positional URL matching ──────────────────────────────
+
+/** Normalize a LinkedIn URL for reliable comparison */
+const normalizeLinkedinUrl = (url: string): string =>
+  url.trim().replace(/\/$/, '').replace(/\?.*$/, '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').toLowerCase();
+
 /**
- * Find the row index of a lead in the sheet by linkedin_url.
- * If found, saves row_index to the Consumo for future use.
+ * Group an array of items by a string key.
+ */
+function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(item);
+  }
+  return map;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Scan the sheet, find matching Consumos by linkedin_url, and link them
+ * by updating sheet_id + row_index. Uses positional matching so duplicate
+ * URLs are handled correctly (consumo[0] → earliest row, consumo[1] → next, etc.)
+ */
+app.post('/api/sheet-link-leads', async (req: Request, res: Response) => {
+  try {
+    const { userId, spreadsheetId } = req.body;
+    if (!userId || !spreadsheetId) {
+      return res.status(400).json({ error: 'userId and spreadsheetId are required' });
+    }
+
+    // Read all sheet rows (including duplicates) in sheet order (= chronological)
+    const sheetRows = await sheetsService.readAllLinkedinUrls(userId, spreadsheetId);
+    if (sheetRows.length === 0) {
+      return res.json({ linked: 0, message: 'No se encontraron datos en la hoja' });
+    }
+
+    // Group sheet rows by normalized URL, preserving order
+    const sheetRowsByUrl = groupBy(sheetRows, r => normalizeLinkedinUrl(r.linkedinUrl));
+
+    // Fetch all consumos for this user ordered by fecha ASC (insertion order)
+    const consumos = await prisma.consumo.findMany({
+      where: { usuario_id: userId },
+      orderBy: { fecha: 'asc' },
+      select: { id: true, sheet_id: true, row_index: true, lead_data: true }
+    });
+
+    // Group consumos by normalized linkedin_url (already in fecha ASC order)
+    const consumosByUrl = groupBy(
+      consumos.filter(c => !!(c.lead_data as any)?.linkedin_url),
+      c => normalizeLinkedinUrl((c.lead_data as any).linkedin_url)
+    );
+
+    let linked = 0;
+    for (const [normUrl, urlConsumosOrdered] of consumosByUrl) {
+      // Find matching sheet rows (exact or partial)
+      let sheetRowsForUrl = sheetRowsByUrl.get(normUrl);
+      if (!sheetRowsForUrl) {
+        // Partial match fallback: find the first sheet URL that overlaps
+        for (const [sheetNorm, rows] of sheetRowsByUrl) {
+          if (sheetNorm.includes(normUrl) || normUrl.includes(sheetNorm)) {
+            sheetRowsForUrl = rows; break;
+          }
+        }
+      }
+      if (!sheetRowsForUrl) continue;
+
+      // Positional zip: consumo[i] → sheetRow[i]
+      for (let i = 0; i < urlConsumosOrdered.length; i++) {
+        const consumo   = urlConsumosOrdered[i];
+        const sheetRow  = sheetRowsForUrl[i]; // undefined if fewer sheet rows than consumos
+        if (!sheetRow) continue;
+
+        if (consumo.sheet_id !== spreadsheetId || consumo.row_index !== sheetRow.rowIndex) {
+          await prisma.consumo.update({
+            where: { id: consumo.id },
+            data: { sheet_id: spreadsheetId, row_index: sheetRow.rowIndex }
+          });
+          linked++;
+        }
+      }
+    }
+
+    console.log(`[SheetLink] Linked ${linked} consumos to sheet ${spreadsheetId} for user ${userId}`);
+    res.json({ linked, total: sheetRows.length });
+  } catch (error) {
+    console.error('[SheetLink] Error linking leads:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown' });
+  }
+});
+
+/**
+ * Find the row index for a specific Consumo using positional matching.
+ * Pass consumoId so duplicates resolve correctly (1st save → 1st row, 2nd → 2nd, etc.)
  */
 app.get('/api/sheet-find-row', async (req: Request, res: Response) => {
   try {
-    const userId       = req.query.userId        as string;
+    const userId        = req.query.userId        as string;
     const spreadsheetId = req.query.spreadsheetId as string;
-    const linkedinUrl  = req.query.linkedinUrl    as string;
+    const linkedinUrl   = req.query.linkedinUrl   as string;
+    const consumoId     = req.query.consumoId     as string | undefined;
 
     if (!userId || !spreadsheetId || !linkedinUrl) {
       return res.status(400).json({ error: 'userId, spreadsheetId, and linkedinUrl are required' });
     }
 
-    const rowIndex = await sheetsService.findRowByLinkedinUrl(userId, spreadsheetId, linkedinUrl);
+    const normTarget = normalizeLinkedinUrl(linkedinUrl);
 
-    if (rowIndex !== null) {
-      // Persist row_index retroactively so future lookups are instant
-      await prisma.consumo.updateMany({
-        where: {
-          usuario_id: userId,
-          sheet_id:   spreadsheetId,
-          row_index:  null,
-          lead_data:  { path: ['linkedin_url'], equals: linkedinUrl }
-        },
-        data: { row_index: rowIndex }
+    // All sheet rows for this URL (in sheet order = chronological)
+    const allSheetRows = await sheetsService.readAllLinkedinUrls(userId, spreadsheetId);
+    const matchingSheetRows = allSheetRows.filter(r =>
+      normalizeLinkedinUrl(r.linkedinUrl) === normTarget ||
+      normalizeLinkedinUrl(r.linkedinUrl).includes(normTarget) ||
+      normTarget.includes(normalizeLinkedinUrl(r.linkedinUrl))
+    );
+
+    if (matchingSheetRows.length === 0) {
+      return res.json({ rowIndex: null });
+    }
+
+    // All consumos with this URL for this user (fecha ASC = insertion order)
+    const allConsumosWithUrl = await prisma.consumo.findMany({
+      where: { usuario_id: userId },
+      orderBy: { fecha: 'asc' },
+      select: { id: true, fecha: true, lead_data: true }
+    }).then(cs => cs.filter(c => {
+      const url = (c.lead_data as any)?.linkedin_url || '';
+      const norm = normalizeLinkedinUrl(url);
+      return norm === normTarget || norm.includes(normTarget) || normTarget.includes(norm);
+    }));
+
+    // Find position of this consumoId in the ordered list
+    const position = consumoId
+      ? allConsumosWithUrl.findIndex(c => c.id === consumoId)
+      : 0;
+
+    const rowIndex = matchingSheetRows[position >= 0 ? position : 0]?.rowIndex ?? null;
+
+    if (rowIndex !== null && consumoId) {
+      // Persist row_index to this specific consumo
+      await prisma.consumo.update({
+        where: { id: consumoId },
+        data: { sheet_id: spreadsheetId, row_index: rowIndex }
       });
     }
 
