@@ -1555,6 +1555,14 @@ const getProviderIconUrl = (providerId) => {
         });
     };
 
+    const updateSyncBtnCount = () => {
+        const checked = sheetsDiffRows.querySelectorAll('.ap-diff-check:checked').length;
+        sheetsSyncBtn.disabled = checked === 0;
+        sheetsSyncBtnText.innerHTML = checked === 0
+            ? '<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Sin cambios'
+            : `<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> Sincronizar ${checked} campo${checked !== 1 ? 's' : ''}`;
+    };
+
     const renderDiff = (dbData, sheetData, dbOnly) => {
         const db    = dbData    || {};
         const sheet = sheetData || {};
@@ -1564,19 +1572,31 @@ const getProviderIconUrl = (providerId) => {
             const sheetVal = dbOnly ? dbVal : String(sheet[field] ?? '');
             const changed  = !dbOnly && sheetVal !== dbVal;
             if (changed) changeCount++;
-            return `<div style="padding:6px 8px;border-radius:6px;background:${changed ? '#fffbeb' : 'transparent'};border:${changed ? '1px solid #fde68a' : 'none'};">
-  <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:${changed ? '#d97706' : '#64748b'};margin-bottom:2px;">${FIELD_LABELS[field]}${changed ? ' · cambiado' : ''}</div>
-  ${changed ? `<div style="font-size:11px;color:#9ca3af;text-decoration:line-through;word-break:break-all;">${dbVal || '—'}</div><div style="font-size:12px;color:#1e293b;font-weight:500;word-break:break-all;">${sheetVal || '—'}</div>` : `<div style="font-size:12px;color:#1e293b;word-break:break-all;">${sheetVal || dbVal || '—'}</div>`}
+            if (changed) {
+                return `<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;cursor:pointer;">
+  <input type="checkbox" class="ap-diff-check" data-field="${field}" checked style="margin-top:3px;accent-color:#7c3aed;cursor:pointer;flex-shrink:0;">
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#d97706;margin-bottom:2px;">${FIELD_LABELS[field]}</div>
+    <div style="font-size:11px;color:#9ca3af;text-decoration:line-through;word-break:break-all;">${dbVal || '—'}</div>
+    <div style="font-size:12px;color:#1e293b;font-weight:500;word-break:break-all;">${sheetVal || '—'}</div>
+  </div>
+</label>`;
+            }
+            return `<div style="padding:6px 8px;border-radius:6px;">
+  <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#64748b;margin-bottom:2px;">${FIELD_LABELS[field]}</div>
+  <div style="font-size:12px;color:#1e293b;word-break:break-all;">${sheetVal || dbVal || '—'}</div>
 </div>`;
         }).join('');
         sheetsDiffRows.innerHTML = rows;
 
+        // Attach checkbox listeners
+        sheetsDiffRows.querySelectorAll('.ap-diff-check').forEach(cb => {
+            cb.addEventListener('change', updateSyncBtnCount);
+        });
+
         if (!dbOnly && selectedConsumoId) {
             sheetsSyncBtn.style.display = '';
-            sheetsSyncBtn.disabled      = changeCount === 0;
-            sheetsSyncBtnText.innerHTML = changeCount === 0
-                ? '<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Sin cambios'
-                : `<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> Sincronizar ${changeCount} campo${changeCount !== 1 ? 's' : ''}`;
+            updateSyncBtnCount();
         } else {
             sheetsSyncBtn.style.display = 'none';
         }
@@ -1591,15 +1611,30 @@ const getProviderIconUrl = (providerId) => {
             const rowRes = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}`);
             if (!rowRes.ok) throw new Error('Error al leer la fila');
             const { sheetData } = await rowRes.json();
+
+            // Only sync fields that are checked by the user
+            const checkedFields = new Set(
+                [...sheetsDiffRows.querySelectorAll('.ap-diff-check:checked')].map(cb => cb.dataset.field)
+            );
+            const filteredData = {};
+            for (const field of checkedFields) {
+                if (sheetData[field] !== undefined) filteredData[field] = sheetData[field];
+            }
+
+            if (Object.keys(filteredData).length === 0) {
+                setSheetsStatus('No hay campos seleccionados para sincronizar.', true);
+                return;
+            }
+
             const syncRes = await fetch(`${apiUrl}/api/sheet-sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, consumoId: selectedConsumoId, sheetData })
+                body: JSON.stringify({ userId, consumoId: selectedConsumoId, sheetData: filteredData })
             });
             if (!syncRes.ok) throw new Error('Error al sincronizar');
             const lead = loadedSheetLeads.find(l => l.id === selectedConsumoId);
-            if (lead) lead.lead_data = { ...(lead.lead_data || {}), ...sheetData };
-            setSheetsStatus('✓ Datos sincronizados correctamente');
+            if (lead) lead.lead_data = { ...(lead.lead_data || {}), ...filteredData };
+            setSheetsStatus(`✓ ${Object.keys(filteredData).length} campo${Object.keys(filteredData).length !== 1 ? 's' : ''} sincronizado${Object.keys(filteredData).length !== 1 ? 's' : ''}`);
             setTimeout(() => setSheetsStatus(''), 3500);
             renderDiff(lead?.lead_data || {}, sheetData, false);
         } catch (err) {
