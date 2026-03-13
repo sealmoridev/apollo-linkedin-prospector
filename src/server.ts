@@ -873,9 +873,25 @@ app.post('/api/sheet-link-leads', async (req: Request, res: Response) => {
     // Group sheet rows by normalized URL, preserving order
     const sheetRowsByUrl = groupBy(sheetRows, r => normalizeLinkedinUrl(r.linkedinUrl));
 
+    // Resolve all usuario_id values that belong to this person.
+    // If the extension was reinstalled, a new prospectorUserId is generated but the
+    // Google OAuth email is the same → find all ExtensionUser records with that email.
+    const resolvedUserIds = new Set<string>([userId]);
+    try {
+      const token = tokenStorage.getToken(userId);
+      const email = token?.googleProfile?.email;
+      if (email) {
+        const sameEmailUsers = await prisma.extensionUser.findMany({
+          where: { email },
+          select: { id: true }
+        });
+        sameEmailUsers.forEach(u => resolvedUserIds.add(u.id));
+      }
+    } catch (_) { /* best-effort */ }
+
     // Fetch all consumos for this user ordered by fecha ASC (insertion order)
     const consumos = await prisma.consumo.findMany({
-      where: { usuario_id: userId },
+      where: { usuario_id: { in: Array.from(resolvedUserIds) } },
       orderBy: { fecha: 'asc' },
       select: { id: true, sheet_id: true, row_index: true, lead_data: true }
     });
