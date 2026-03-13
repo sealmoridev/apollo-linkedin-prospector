@@ -880,13 +880,17 @@ app.post('/api/sheet-link-leads', async (req: Request, res: Response) => {
       select: { id: true, sheet_id: true, row_index: true, lead_data: true }
     });
 
-    // Group consumos by normalized linkedin_url (already in fecha ASC order)
+    // ── Pass 1: URL-based matching ────────────────────────────────────────────
+    const consumosWithUrl = consumos.filter(c => !!(c.lead_data as any)?.linkedin_url);
     const consumosByUrl = groupBy(
-      consumos.filter(c => !!(c.lead_data as any)?.linkedin_url),
+      consumosWithUrl,
       c => normalizeLinkedinUrl((c.lead_data as any).linkedin_url)
     );
 
     let linked = 0;
+    const linkedConsumoIds = new Set<string>();
+    const linkedRowIndexes = new Set<number>();
+
     for (const [normUrl, urlConsumosOrdered] of consumosByUrl) {
       // Find matching sheet rows (exact or partial)
       let sheetRowsForUrl = sheetRowsByUrl.get(normUrl);
@@ -913,11 +917,45 @@ app.post('/api/sheet-link-leads', async (req: Request, res: Response) => {
           });
           linked++;
         }
+        linkedConsumoIds.add(consumo.id);
+        linkedRowIndexes.add(sheetRow.rowIndex);
       }
     }
 
-    console.log(`[SheetLink] Linked ${linked} consumos to sheet ${spreadsheetId} for user ${userId}`);
-    res.json({ linked, total: sheetRows.length });
+    // ── Pass 2: positional fallback for consumos without lead_data.linkedin_url ─
+    // Only runs when URL matching found nothing AND some sheet rows are unclaimed.
+    // Zip remaining unlinked consumos (no sheet_id) with remaining sheet rows in order.
+    let positionalLinked = 0;
+    if (linked === 0) {
+      const unlinkedConsumosNoUrl = consumos.filter(
+        c => !linkedConsumoIds.has(c.id) && !c.sheet_id && !(c.lead_data as any)?.linkedin_url
+      );
+      const unclaimedSheetRows = sheetRows.filter(r => !linkedRowIndexes.has(r.rowIndex));
+
+      for (let i = 0; i < Math.min(unlinkedConsumosNoUrl.length, unclaimedSheetRows.length); i++) {
+        const consumo  = unlinkedConsumosNoUrl[i];
+        const sheetRow = unclaimedSheetRows[i];
+        await prisma.consumo.update({
+          where: { id: consumo.id },
+          data: { sheet_id: spreadsheetId, row_index: sheetRow.rowIndex }
+        });
+        positionalLinked++;
+      }
+      linked += positionalLinked;
+    }
+
+    const debugInfo = {
+      sheetUrlsFound:    sheetRows.length,
+      consumosTotal:     consumos.length,
+      consumosWithUrl:   consumosWithUrl.length,
+      uniqueUrlsInDb:    consumosByUrl.size,
+      uniqueUrlsInSheet: sheetRowsByUrl.size,
+      positionalLinked,
+      sampleSheetUrls:   sheetRows.slice(0, 3).map(r => r.linkedinUrl),
+      sampleDbUrls:      consumosWithUrl.slice(0, 3).map(c => (c.lead_data as any).linkedin_url),
+    };
+    console.log(`[SheetLink] sheet=${spreadsheetId} user=${userId}`, debugInfo);
+    res.json({ linked, total: sheetRows.length, debug: debugInfo });
   } catch (error) {
     console.error('[SheetLink] Error linking leads:', error);
     res.status(500).json({ error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown' });

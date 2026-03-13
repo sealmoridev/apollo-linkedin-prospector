@@ -1419,7 +1419,24 @@ const getProviderIconUrl = (providerId) => {
             if (data.linked > 0) {
                 await loadSheetLeads(); // reload with newly linked leads
             } else {
-                sheetsLeadListInner.innerHTML = '<div style="text-align:center;padding:32px 16px;color:#94a3b8;font-size:12px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>No se encontraron leads registrados en esta hoja</div>';
+                const d = data.debug || {};
+                let msg = 'No se encontraron leads registrados para esta hoja.';
+                if (d.consumosTotal === 0) {
+                    msg = 'Aún no has guardado leads con Mr Prospect. Extrae un lead desde LinkedIn y guárdalo aquí.';
+                } else if (d.sheetUrlsFound === 0) {
+                    msg = 'La columna M (linkedin_url) de esta hoja está vacía. No hay URLs para vincular.';
+                } else if (d.consumosWithUrl === 0 && d.consumosTotal > 0) {
+                    msg = `Tienes ${d.consumosTotal} consumos en DB pero son de una versión anterior que no guardaba URLs. Los datos no se pueden vincular automáticamente.`;
+                }
+                const debugHtml = `
+<div style="margin-top:10px;padding:8px 10px;background:#0f172a;border-radius:6px;text-align:left;font-size:10px;color:#94a3b8;line-height:1.7;">
+  <div><b style="color:#cbd5e1;">URLs en hoja (col M):</b> ${d.sheetUrlsFound ?? '?'}</div>
+  <div><b style="color:#cbd5e1;">Consumos en DB:</b> ${d.consumosTotal ?? '?'}</div>
+  <div><b style="color:#cbd5e1;">Con URL guardada:</b> ${d.consumosWithUrl ?? '?'}</div>
+  ${d.sampleSheetUrls?.length ? `<div style="margin-top:4px;color:#64748b;">Ej. sheet: ${d.sampleSheetUrls[0]}</div>` : ''}
+  ${d.sampleDbUrls?.length ? `<div style="color:#64748b;">Ej. DB: ${d.sampleDbUrls[0]}</div>` : ''}
+</div>`;
+                sheetsLeadListInner.innerHTML = `<div style="text-align:center;padding:24px 16px;color:#94a3b8;font-size:12px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 8px;display:block;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>${msg}${debugHtml}</div>`;
             }
         } catch (err) {
             sheetsLeadListInner.innerHTML = `<div style="text-align:center;padding:24px 0;color:#dc2626;font-size:12px;">Error: ${err.message}</div>`;
