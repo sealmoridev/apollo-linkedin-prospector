@@ -1563,13 +1563,24 @@ const getProviderIconUrl = (providerId) => {
             : `<svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> Sincronizar ${checked} campo${checked !== 1 ? 's' : ''}`;
     };
 
+    // Normalize a field value for diff comparison.
+    // Handles: email_status (EN→ES), phone pending, null/empty equivalence.
+    const EMAIL_STATUS_ES = { valid: 'Válido', invalid: 'Inválido', catch_all: 'Catch-All' };
+    const PENDING_PHONE   = 'Pendiente Webhook';
+    const normalizeForDiff = (field, val) => {
+        const s = String(val ?? '').trim();
+        if (field === 'email_status') return EMAIL_STATUS_ES[s] || s;
+        if (field === 'phone_number' && (s === '' || s === PENDING_PHONE)) return '';
+        return s;
+    };
+
     const renderDiff = (dbData, sheetData, dbOnly) => {
         const db    = dbData    || {};
         const sheet = sheetData || {};
         let changeCount = 0;
         const rows = SYNCABLE_FIELDS_LIST.map(field => {
-            const dbVal    = String(db[field]    ?? '');
-            const sheetVal = dbOnly ? dbVal : String(sheet[field] ?? '');
+            const dbVal    = normalizeForDiff(field, db[field]);
+            const sheetVal = dbOnly ? dbVal : normalizeForDiff(field, sheet[field]);
             const changed  = !dbOnly && sheetVal !== dbVal;
             if (changed) changeCount++;
             if (changed) {
@@ -1651,10 +1662,9 @@ const getProviderIconUrl = (providerId) => {
         setSheetsStatus('');
     });
 
-    // Track tab URL changes to detect Google Sheets navigation
-    chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-        if (!tab.active || !changeInfo.url) return;
-        const url = changeInfo.url;
+    // ── Shared: check a URL and switch modes accordingly ─────────────────────
+    const handleTabUrl = (url) => {
+        if (!url) return;
         if (isGoogleSheetsUrl(url)) {
             if (url !== currentSheetsUrl) {
                 currentSheetsUrl   = url;
@@ -1666,6 +1676,33 @@ const getProviderIconUrl = (providerId) => {
             currentLinkedinUrl = url;
             updateUrlDisplay();
         }
+    };
+
+    // ── Manual "Escanear hoja" button ─────────────────────────────────────────
+    const scanSheetBtn = document.getElementById('apScanSheetBtn');
+    scanSheetBtn.addEventListener('click', () => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const url = tabs[0]?.url || '';
+            if (!isGoogleSheetsUrl(url)) {
+                setSheetsStatus && setSheetsStatus('La pestaña activa no es una hoja de Google Sheets.', true);
+                setTimeout(() => setSheetsStatus && setSheetsStatus(''), 3000);
+                return;
+            }
+            handleTabUrl(url);
+        });
+    });
+
+    // ── Detect tab navigation (URL change within same tab) ────────────────────
+    chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+        if (!tab.active || !changeInfo.url) return;
+        handleTabUrl(changeInfo.url);
+    });
+
+    // ── Detect tab switch (switching to an already-loaded Sheets tab) ─────────
+    chrome.tabs.onActivated.addListener(() => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            handleTabUrl(tabs[0]?.url || '');
+        });
     });
 
     // If sidepanel was opened while already on a Google Sheets tab

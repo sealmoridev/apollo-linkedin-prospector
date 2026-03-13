@@ -1081,7 +1081,8 @@ app.post('/api/sheet-sync', async (req: Request, res: Response) => {
     }
 
     const consumo = await prisma.consumo.findUnique({ where: { id: consumoId } });
-    if (!consumo || consumo.usuario_id !== userId) {
+    const allowedIds = await resolveUserIds(userId);
+    if (!consumo || !allowedIds.includes(consumo.usuario_id)) {
       return res.status(404).json({ error: 'Record not found' });
     }
 
