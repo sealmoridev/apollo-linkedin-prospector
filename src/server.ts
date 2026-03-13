@@ -781,6 +781,22 @@ app.post('/api/sheets/save', async (req: Request, res: Response) => {
 // SHEET SYNC ROUTES
 // ============================================================================
 
+/**
+ * Resolve all usuario_id values that belong to the same person.
+ * Handles extension reinstalls: new prospectorUserId ≠ old one, but Google email matches.
+ */
+async function resolveUserIds(userId: string): Promise<string[]> {
+  const ids = new Set<string>([userId]);
+  try {
+    const email = tokenStorage.getToken(userId)?.googleProfile?.email;
+    if (email) {
+      const users = await prisma.extensionUser.findMany({ where: { email }, select: { id: true } });
+      users.forEach(u => ids.add(u.id));
+    }
+  } catch (_) { /* best-effort */ }
+  return Array.from(ids);
+}
+
 /** List saved leads for a specific spreadsheet (for Sheets mode in sidepanel) */
 app.get('/api/sheet-leads', async (req: Request, res: Response) => {
   try {
@@ -791,8 +807,9 @@ app.get('/api/sheet-leads', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'userId and spreadsheetId are required' });
     }
 
+    const userIds = await resolveUserIds(userId);
     const consumos = await prisma.consumo.findMany({
-      where: { usuario_id: userId, sheet_id: spreadsheetId },
+      where: { usuario_id: { in: userIds }, sheet_id: spreadsheetId },
       orderBy: { fecha: 'desc' },
       take: 200,
       select: { id: true, fecha: true, row_index: true, lead_data: true }
@@ -873,23 +890,9 @@ app.post('/api/sheet-link-leads', async (req: Request, res: Response) => {
       return res.json({ linked: 0, message: 'No se encontraron datos en la hoja' });
     }
 
-    // ── Resolve all usuario_id values for this person (handles reinstalls) ────
-    const resolvedUserIds = new Set<string>([userId]);
-    try {
-      const token = tokenStorage.getToken(userId);
-      const sdrEmail = token?.googleProfile?.email;
-      if (sdrEmail) {
-        const sameEmailUsers = await prisma.extensionUser.findMany({
-          where: { email: sdrEmail },
-          select: { id: true }
-        });
-        sameEmailUsers.forEach(u => resolvedUserIds.add(u.id));
-      }
-    } catch (_) { /* best-effort */ }
-
     // ── Fetch all consumos ordered ASC (insertion order) ─────────────────────
     const consumos = await prisma.consumo.findMany({
-      where: { usuario_id: { in: Array.from(resolvedUserIds) } },
+      where: { usuario_id: { in: await resolveUserIds(userId) } },
       orderBy: { fecha: 'asc' },
       select: { id: true, sheet_id: true, sheet_name: true, row_index: true, lead_data: true }
     });
