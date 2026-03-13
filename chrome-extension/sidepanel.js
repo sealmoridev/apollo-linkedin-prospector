@@ -1499,7 +1499,8 @@ const getProviderIconUrl = (providerId) => {
             return;
         }
         try {
-            const res = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}`);
+            const consumoParam = selectedConsumoId ? `&consumoId=${encodeURIComponent(selectedConsumoId)}` : '';
+            const res = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}${consumoParam}`);
             if (!res.ok) throw new Error('Error al leer la fila');
             const data = await res.json();
             if (data.consumoId) selectedConsumoId = data.consumoId;
@@ -1619,7 +1620,7 @@ const getProviderIconUrl = (providerId) => {
         sheetsSyncBtnText.style.display = 'none';
         sheetsSyncLoader.style.display  = 'inline-block';
         try {
-            const rowRes = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}`);
+            const rowRes = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}&consumoId=${encodeURIComponent(selectedConsumoId)}`);
             if (!rowRes.ok) throw new Error('Error al leer la fila');
             const { sheetData } = await rowRes.json();
 

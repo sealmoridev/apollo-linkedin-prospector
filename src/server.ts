@@ -833,12 +833,20 @@ app.get('/api/sheet-row', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'userId, spreadsheetId, and rowIndex are required' });
     }
 
+    const consumoId = req.query.consumoId as string | undefined;
+
+    const userIds = await resolveUserIds(userId);
     const [sheetData, consumo] = await Promise.all([
       sheetsService.readRow(userId, spreadsheetId, rowIndex),
-      prisma.consumo.findFirst({
-        where: { usuario_id: userId, sheet_id: spreadsheetId, row_index: rowIndex },
-        select: { id: true, lead_data: true }
-      })
+      consumoId
+        ? prisma.consumo.findFirst({
+            where: { id: consumoId, usuario_id: { in: userIds } },
+            select: { id: true, lead_data: true }
+          })
+        : prisma.consumo.findFirst({
+            where: { usuario_id: { in: userIds }, sheet_id: spreadsheetId, row_index: rowIndex },
+            select: { id: true, lead_data: true }
+          })
     ]);
 
     res.json({ sheetData, dbData: consumo?.lead_data ?? null, consumoId: consumo?.id ?? null });
