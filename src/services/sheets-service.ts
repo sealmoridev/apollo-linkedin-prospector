@@ -302,6 +302,44 @@ export class SheetsService {
     }
 
     /**
+     * Devuelve el título del documento (e.g. "Apollo Prospector Leads").
+     */
+    async getSpreadsheetTitle(userId: string, spreadsheetId: string): Promise<string> {
+        const sheets = this.getUserSheetsClient(userId);
+        const res = await sheets.spreadsheets.get({ spreadsheetId, fields: 'properties.title' });
+        return res.data.properties?.title || '';
+    }
+
+    /**
+     * Lee todas las filas de la hoja con campos identificadores (A:R).
+     * Devuelve rowIndex (1-based, skip header), linkedinUrl, primaryEmail, fullName.
+     */
+    async readAllRows(userId: string, spreadsheetId: string): Promise<Array<{
+        rowIndex: number;
+        linkedinUrl: string;
+        primaryEmail: string;
+        fullName: string;
+    }>> {
+        const sheets = this.getUserSheetsClient(userId);
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: 'Leads Base!A:R',
+        });
+        const rows = response.data.values || [];
+        const result: Array<{ rowIndex: number; linkedinUrl: string; primaryEmail: string; fullName: string }> = [];
+        rows.forEach((row, i) => {
+            if (i === 0) return; // skip header
+            const fullName     = (row[1]  || '').trim().toLowerCase();
+            const primaryEmail = (row[5]  || '').trim().toLowerCase();
+            const linkedinUrl  = (row[12] || '').trim().replace(/\/$/, '');
+            if (fullName || primaryEmail || linkedinUrl) {
+                result.push({ rowIndex: i + 1, linkedinUrl, primaryEmail, fullName });
+            }
+        });
+        return result;
+    }
+
+    /**
      * Lee todas las filas del sheet y devuelve un mapa { linkedin_url → rowIndex }.
      * Útil para vincular retroactivamente consumos sin sheet_id.
      */

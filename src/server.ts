@@ -864,111 +864,132 @@ app.post('/api/sheet-link-leads', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'userId and spreadsheetId are required' });
     }
 
-    // Read all sheet rows (including duplicates) in sheet order (= chronological)
-    const sheetRows = await sheetsService.readAllLinkedinUrls(userId, spreadsheetId);
+    // ── Read sheet + spreadsheet title in parallel ────────────────────────────
+    const [sheetRows, spreadsheetTitle] = await Promise.all([
+      sheetsService.readAllRows(userId, spreadsheetId),
+      sheetsService.getSpreadsheetTitle(userId, spreadsheetId),
+    ]);
     if (sheetRows.length === 0) {
       return res.json({ linked: 0, message: 'No se encontraron datos en la hoja' });
     }
 
-    // Group sheet rows by normalized URL, preserving order
-    const sheetRowsByUrl = groupBy(sheetRows, r => normalizeLinkedinUrl(r.linkedinUrl));
-
-    // Resolve all usuario_id values that belong to this person.
-    // If the extension was reinstalled, a new prospectorUserId is generated but the
-    // Google OAuth email is the same → find all ExtensionUser records with that email.
+    // ── Resolve all usuario_id values for this person (handles reinstalls) ────
     const resolvedUserIds = new Set<string>([userId]);
     try {
       const token = tokenStorage.getToken(userId);
-      const email = token?.googleProfile?.email;
-      if (email) {
+      const sdrEmail = token?.googleProfile?.email;
+      if (sdrEmail) {
         const sameEmailUsers = await prisma.extensionUser.findMany({
-          where: { email },
+          where: { email: sdrEmail },
           select: { id: true }
         });
         sameEmailUsers.forEach(u => resolvedUserIds.add(u.id));
       }
     } catch (_) { /* best-effort */ }
 
-    // Fetch all consumos for this user ordered by fecha ASC (insertion order)
+    // ── Fetch all consumos ordered ASC (insertion order) ─────────────────────
     const consumos = await prisma.consumo.findMany({
       where: { usuario_id: { in: Array.from(resolvedUserIds) } },
       orderBy: { fecha: 'asc' },
-      select: { id: true, sheet_id: true, row_index: true, lead_data: true }
+      select: { id: true, sheet_id: true, sheet_name: true, row_index: true, lead_data: true }
     });
 
-    // ── Pass 1: URL-based matching ────────────────────────────────────────────
-    const consumosWithUrl = consumos.filter(c => !!(c.lead_data as any)?.linkedin_url);
-    const consumosByUrl = groupBy(
-      consumosWithUrl,
-      c => normalizeLinkedinUrl((c.lead_data as any).linkedin_url)
-    );
-
-    let linked = 0;
     const linkedConsumoIds = new Set<string>();
     const linkedRowIndexes = new Set<number>();
+    let linked = 0;
 
-    for (const [normUrl, urlConsumosOrdered] of consumosByUrl) {
-      // Find matching sheet rows (exact or partial)
-      let sheetRowsForUrl = sheetRowsByUrl.get(normUrl);
-      if (!sheetRowsForUrl) {
-        // Partial match fallback: find the first sheet URL that overlaps
-        for (const [sheetNorm, rows] of sheetRowsByUrl) {
-          if (sheetNorm.includes(normUrl) || normUrl.includes(sheetNorm)) {
-            sheetRowsForUrl = rows; break;
-          }
+    const linkOne = async (consumoId: string, rowIndex: number) => {
+      await prisma.consumo.update({
+        where: { id: consumoId },
+        data: { sheet_id: spreadsheetId, row_index: rowIndex }
+      });
+      linkedConsumoIds.add(consumoId);
+      linkedRowIndexes.add(rowIndex);
+      linked++;
+    };
+
+    // ── Pass 1: match by linkedin_url ─────────────────────────────────────────
+    const normEmail = (e: string) => e.trim().toLowerCase();
+    const consumosWithUrl = consumos.filter(c => !!(c.lead_data as any)?.linkedin_url);
+    const consumosByUrl = groupBy(consumosWithUrl, c =>
+      normalizeLinkedinUrl((c.lead_data as any).linkedin_url)
+    );
+
+    for (const sheetRow of sheetRows) {
+      if (!sheetRow.linkedinUrl) continue;
+      const normUrl = normalizeLinkedinUrl(sheetRow.linkedinUrl);
+      // exact match first, then partial
+      let candidates = consumosByUrl.get(normUrl);
+      if (!candidates) {
+        for (const [key, rows] of consumosByUrl) {
+          if (key.includes(normUrl) || normUrl.includes(key)) { candidates = rows; break; }
         }
       }
-      if (!sheetRowsForUrl) continue;
+      if (!candidates) continue;
+      // find first unlinked candidate for this URL
+      const consumo = candidates.find(c => !linkedConsumoIds.has(c.id));
+      if (consumo) await linkOne(consumo.id, sheetRow.rowIndex);
+    }
 
-      // Positional zip: consumo[i] → sheetRow[i]
-      for (let i = 0; i < urlConsumosOrdered.length; i++) {
-        const consumo   = urlConsumosOrdered[i];
-        const sheetRow  = sheetRowsForUrl[i]; // undefined if fewer sheet rows than consumos
-        if (!sheetRow) continue;
+    // ── Pass 2: match by primary_email (for rows not yet linked) ─────────────
+    const consumosWithEmail = consumos.filter(
+      c => !linkedConsumoIds.has(c.id) && !!(c.lead_data as any)?.primary_email
+    );
+    const consumosByEmail = groupBy(consumosWithEmail, c =>
+      normEmail((c.lead_data as any).primary_email)
+    );
 
-        if (consumo.sheet_id !== spreadsheetId || consumo.row_index !== sheetRow.rowIndex) {
-          await prisma.consumo.update({
-            where: { id: consumo.id },
-            data: { sheet_id: spreadsheetId, row_index: sheetRow.rowIndex }
-          });
-          linked++;
-        }
-        linkedConsumoIds.add(consumo.id);
-        linkedRowIndexes.add(sheetRow.rowIndex);
+    for (const sheetRow of sheetRows) {
+      if (linkedRowIndexes.has(sheetRow.rowIndex)) continue;
+      if (!sheetRow.primaryEmail) continue;
+      const candidates = consumosByEmail.get(normEmail(sheetRow.primaryEmail));
+      if (!candidates) continue;
+      const consumo = candidates.find(c => !linkedConsumoIds.has(c.id));
+      if (consumo) await linkOne(consumo.id, sheetRow.rowIndex);
+    }
+
+    // ── Pass 3: positional zip within same sheet_name group ───────────────────
+    // Consumos that have sheet_name matching this spreadsheet's title but no sheet_id yet.
+    const unclaimedRows = sheetRows.filter(r => !linkedRowIndexes.has(r.rowIndex));
+    if (unclaimedRows.length > 0 && spreadsheetTitle) {
+      const sameSheetConsumosUnlinked = consumos.filter(
+        c => !linkedConsumoIds.has(c.id) &&
+             c.sheet_name === spreadsheetTitle &&
+             !c.sheet_id
+      );
+      for (let i = 0; i < Math.min(sameSheetConsumosUnlinked.length, unclaimedRows.length); i++) {
+        await linkOne(sameSheetConsumosUnlinked[i].id, unclaimedRows[i].rowIndex);
       }
     }
 
-    // ── Pass 2: positional fallback for consumos without lead_data.linkedin_url ─
-    // Only runs when URL matching found nothing AND some sheet rows are unclaimed.
-    // Zip remaining unlinked consumos (no sheet_id) with remaining sheet rows in order.
+    // ── Pass 4: positional fallback (no sheet_id, no URL, no email) ───────────
+    // Only when passes 1-3 found nothing at all.
     let positionalLinked = 0;
     if (linked === 0) {
-      const unlinkedConsumosNoUrl = consumos.filter(
-        c => !linkedConsumoIds.has(c.id) && !c.sheet_id && !(c.lead_data as any)?.linkedin_url
+      const noIdNoUrl = consumos.filter(
+        c => !linkedConsumoIds.has(c.id) &&
+             !c.sheet_id &&
+             !(c.lead_data as any)?.linkedin_url &&
+             !(c.lead_data as any)?.primary_email
       );
-      const unclaimedSheetRows = sheetRows.filter(r => !linkedRowIndexes.has(r.rowIndex));
-
-      for (let i = 0; i < Math.min(unlinkedConsumosNoUrl.length, unclaimedSheetRows.length); i++) {
-        const consumo  = unlinkedConsumosNoUrl[i];
-        const sheetRow = unclaimedSheetRows[i];
-        await prisma.consumo.update({
-          where: { id: consumo.id },
-          data: { sheet_id: spreadsheetId, row_index: sheetRow.rowIndex }
-        });
+      const stillUnclaimed = sheetRows.filter(r => !linkedRowIndexes.has(r.rowIndex));
+      for (let i = 0; i < Math.min(noIdNoUrl.length, stillUnclaimed.length); i++) {
+        await linkOne(noIdNoUrl[i].id, stillUnclaimed[i].rowIndex);
         positionalLinked++;
       }
-      linked += positionalLinked;
     }
 
+    const consumosWithUrl2 = consumos.filter(c => !!(c.lead_data as any)?.linkedin_url);
     const debugInfo = {
       sheetUrlsFound:    sheetRows.length,
+      spreadsheetTitle,
       consumosTotal:     consumos.length,
-      consumosWithUrl:   consumosWithUrl.length,
-      uniqueUrlsInDb:    consumosByUrl.size,
-      uniqueUrlsInSheet: sheetRowsByUrl.size,
+      consumosWithUrl:   consumosWithUrl2.length,
+      consumosWithEmail: consumos.filter(c => !!(c.lead_data as any)?.primary_email).length,
+      sameSheetName:     consumos.filter(c => c.sheet_name === spreadsheetTitle).length,
       positionalLinked,
-      sampleSheetUrls:   sheetRows.slice(0, 3).map(r => r.linkedinUrl),
-      sampleDbUrls:      consumosWithUrl.slice(0, 3).map(c => (c.lead_data as any).linkedin_url),
+      sampleSheetUrl:    sheetRows[0]?.linkedinUrl,
+      sampleDbUrl:       consumosWithUrl2[0] ? (consumosWithUrl2[0].lead_data as any).linkedin_url : null,
     };
     console.log(`[SheetLink] sheet=${spreadsheetId} user=${userId}`, debugInfo);
     res.json({ linked, total: sheetRows.length, debug: debugInfo });
