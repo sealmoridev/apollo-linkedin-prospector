@@ -831,6 +831,42 @@ app.get('/api/sheet-row', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Find the row index of a lead in the sheet by linkedin_url.
+ * If found, saves row_index to the Consumo for future use.
+ */
+app.get('/api/sheet-find-row', async (req: Request, res: Response) => {
+  try {
+    const userId       = req.query.userId        as string;
+    const spreadsheetId = req.query.spreadsheetId as string;
+    const linkedinUrl  = req.query.linkedinUrl    as string;
+
+    if (!userId || !spreadsheetId || !linkedinUrl) {
+      return res.status(400).json({ error: 'userId, spreadsheetId, and linkedinUrl are required' });
+    }
+
+    const rowIndex = await sheetsService.findRowByLinkedinUrl(userId, spreadsheetId, linkedinUrl);
+
+    if (rowIndex !== null) {
+      // Persist row_index retroactively so future lookups are instant
+      await prisma.consumo.updateMany({
+        where: {
+          usuario_id: userId,
+          sheet_id:   spreadsheetId,
+          row_index:  null,
+          lead_data:  { path: ['linkedin_url'], equals: linkedinUrl }
+        },
+        data: { row_index: rowIndex }
+      });
+    }
+
+    res.json({ rowIndex });
+  } catch (error) {
+    console.error('[SheetSync] Error finding row:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown' });
+  }
+});
+
 /** Sync changes from Google Sheet row back into the DB lead_data */
 const SYNCABLE_FIELDS = new Set([
   'full_name', 'first_name', 'last_name', 'title',

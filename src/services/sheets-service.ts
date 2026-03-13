@@ -302,6 +302,27 @@ export class SheetsService {
     }
 
     /**
+     * Busca la fila de un lead por su linkedin_url (columna M).
+     * Retorna el número de fila 1-based, o null si no lo encuentra.
+     */
+    async findRowByLinkedinUrl(userId: string, spreadsheetId: string, linkedinUrl: string): Promise<number | null> {
+        const sheets = this.getUserSheetsClient(userId);
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: 'Leads Base!M:M', // linkedin_url column only
+        });
+        const rows = response.data.values || [];
+        const normalized = linkedinUrl.replace(/\/$/, '');
+        for (let i = 0; i < rows.length; i++) {
+            const cellVal = (rows[i][0] || '').replace(/\/$/, '');
+            if (cellVal && (cellVal === normalized || cellVal.includes(normalized) || normalized.includes(cellVal))) {
+                return i + 1; // 1-based row number
+            }
+        }
+        return null;
+    }
+
+    /**
      * Actualiza el teléfono de un lead (Webhook asíncrono)
      */
     async updatePhone(userId: string, linkedinUrl: string, phones: string[]): Promise<boolean> {

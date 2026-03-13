@@ -1446,7 +1446,10 @@ const getProviderIconUrl = (providerId) => {
         sheetsDiffRows.innerHTML     = '<div style="text-align:center;padding:16px 0;color:#94a3b8;font-size:12px;"><span class="ap-loader" style="display:inline-block;border-color:#94a3b8 transparent transparent;width:12px;height:12px;margin-right:4px;vertical-align:-2px;"></span>Leyendo hoja...</div>';
 
         if (!selectedRowIndex) {
+            // No row_index: show DB data + offer retroactive search by linkedin_url
             renderDiff(lead?.lead_data || {}, null, true);
+            const linkedinUrl = lead?.lead_data?.linkedin_url;
+            if (linkedinUrl) renderFindRowButton(linkedinUrl);
             return;
         }
         try {
@@ -1458,6 +1461,50 @@ const getProviderIconUrl = (providerId) => {
         } catch (err) {
             sheetsDiffRows.innerHTML = `<div style="text-align:center;padding:16px 0;color:#dc2626;font-size:12px;">Error: ${err.message}</div>`;
         }
+    };
+
+    const renderFindRowButton = (linkedinUrl) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'margin-top:10px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; text-align:center;';
+        wrap.innerHTML = `
+            <p style="font-size:11px;color:#64748b;margin:0 0 8px 0;">Este registro es anterior al sistema de filas.<br>¿Buscarlo en el Sheet?</p>
+            <button id="apSheetsFindRowBtn" style="font-size:11px;font-weight:600;color:#7c3aed;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                Buscar fila en Sheet
+            </button>`;
+        sheetsDiffRows.appendChild(wrap);
+
+        document.getElementById('apSheetsFindRowBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('apSheetsFindRowBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="ap-loader" style="display:inline-block;border-color:#7c3aed transparent transparent;width:10px;height:10px;margin-right:4px;vertical-align:-1px;"></span> Buscando...';
+            try {
+                const res = await fetch(`${apiUrl}/api/sheet-find-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&linkedinUrl=${encodeURIComponent(linkedinUrl)}`);
+                if (!res.ok) throw new Error('Error del servidor');
+                const data = await res.json();
+                if (data.rowIndex) {
+                    selectedRowIndex = data.rowIndex;
+                    // Update local cache
+                    const lead = loadedSheetLeads.find(l => l.id === selectedConsumoId);
+                    if (lead) lead.row_index = data.rowIndex;
+                    wrap.remove();
+                    // Now load full diff
+                    sheetsDiffRows.innerHTML = '<div style="text-align:center;padding:12px 0;color:#94a3b8;font-size:12px;"><span class="ap-loader" style="display:inline-block;border-color:#94a3b8 transparent transparent;width:12px;height:12px;margin-right:4px;vertical-align:-2px;"></span>Leyendo fila...</div>';
+                    const rowRes = await fetch(`${apiUrl}/api/sheet-row?userId=${encodeURIComponent(userId)}&spreadsheetId=${encodeURIComponent(currentSpreadsheetId)}&rowIndex=${selectedRowIndex}`);
+                    if (!rowRes.ok) throw new Error('Error al leer la fila');
+                    const rowData = await rowRes.json();
+                    if (rowData.consumoId) selectedConsumoId = rowData.consumoId;
+                    renderDiff(rowData.dbData || {}, rowData.sheetData || {}, false);
+                } else {
+                    wrap.querySelector('p').textContent = 'No se encontró el perfil en esta hoja.';
+                    btn.style.display = 'none';
+                }
+            } catch (err) {
+                wrap.querySelector('p').textContent = `Error: ${err.message}`;
+                btn.disabled = false;
+                btn.innerHTML = 'Reintentar';
+            }
+        });
     };
 
     const renderDiff = (dbData, sheetData, dbOnly) => {
